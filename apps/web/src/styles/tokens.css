@@ -1,0 +1,28 @@
+:root {
+  --bg-deep: #060d18;
+  --bg-panel: #111c2f;
+  --bg-elevated: #1a2740;
+  --accent-sky: #7ad0ff;
+  --accent-teal: #44c9b3;
+  --accent-amber: #f2b95d;
+  --accent-red: #ff7f7f;
+  --ink-strong: #f2f8ff;
+  --ink-normal: #c7d4e6;
+  --ink-soft: #7f90a7;
+  --grid-glow: rgba(126, 193, 255, 0.12);
+}
+
+[data-density="compact"] {
+  --space-card: 0.85rem;
+}
+
+[data-density="comfortable"] {
+  --space-card: 1.15rem;
+}
+
+[data-reduced-sensory="true"] * {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
