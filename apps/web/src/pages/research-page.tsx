@@ -22,7 +22,7 @@ export function ResearchPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4">
-      <header className="panel flex items-center justify-between">
+      <header className="depth-panel flex items-center justify-between rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("research.eyebrow")}</p>
           <h2 className="font-display text-2xl">{t("research.title")}</h2>
@@ -36,12 +36,12 @@ export function ResearchPage({ station }: { station: StationState }) {
       {entries.length === 0 ? (
         <article className="panel text-sm text-ink-soft">{t("research.matrixEmpty")}</article>
       ) : (
-        <article className="depth-panel overflow-hidden rounded-[22px] border border-white/12 p-4">
+        <article className="depth-panel overflow-hidden rounded-[24px] border border-white/14 p-4">
           <div className="research-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {entries.map((entry) => (
               <div
                 key={entry.key}
-                className="rounded-xl border border-white/12 bg-[linear-gradient(180deg,rgba(11,20,34,0.74),rgba(8,14,24,0.9))] p-3"
+                className="rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(11,20,34,0.78),rgba(8,14,24,0.92))] p-3"
               >
                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-soft">{entry.key}</p>
                 <h3 className="mt-1 font-display text-lg text-ink-strong">{entry.label}</h3>
@@ -72,7 +72,7 @@ export function ResearchPage({ station }: { station: StationState }) {
                       audio.playEffect("error");
                     }
                   }}
-                  className="mt-3 rounded-lg border border-accent-teal/50 px-3 py-1.5 text-xs text-accent-teal transition hover:bg-accent-teal/10 disabled:opacity-60"
+                  className="mt-3 rounded-full border border-accent-teal/50 px-3 py-1.5 text-xs text-accent-teal transition hover:bg-accent-teal/10 disabled:opacity-60"
                 >
                   {t("research.purchase")}
                 </button>

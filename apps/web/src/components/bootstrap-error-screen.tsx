@@ -22,7 +22,7 @@ export function BootstrapErrorScreen({
     <main className="command-grid relative flex min-h-screen items-center justify-center overflow-hidden px-6 text-ink-normal">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,127,127,0.14),transparent_44%)]" />
 
-      <section className="panel relative w-full max-w-2xl p-7 text-center lg:p-9">
+      <section className="panel relative w-full max-w-2xl rounded-[26px] p-7 text-center lg:p-9">
         <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full border border-accent-red/35 bg-accent-red/10">
           <ServerCrash className="h-7 w-7 text-accent-red" />
         </div>

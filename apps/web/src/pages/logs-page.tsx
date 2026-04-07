@@ -22,7 +22,7 @@ export function LogsPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4">
-      <header className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <header className="depth-panel rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("logs.eyebrow")}</p>
@@ -33,13 +33,13 @@ export function LogsPage({ station }: { station: StationState }) {
         <p className="mt-3 max-w-2xl text-sm text-ink-normal">{t("logs.intro")}</p>
       </header>
 
-      <article className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <article className="depth-panel rounded-[24px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         {logsQuery.isLoading ? (
           <p className="text-sm text-ink-soft">{t("logs.loading")}</p>
         ) : logsQuery.data && logsQuery.data.length > 0 ? (
           <ul className="mission-feed timeline-feed grid gap-3">
             {logsQuery.data.map((log) => (
-              <li key={log.id} className={`rounded-xl border px-4 py-3 ${logTone(log.type)}`}>
+              <li key={log.id} className={`rounded-[18px] border px-4 py-3 ${logTone(log.type)}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{localizeLogType(log.type, t)}</p>
                   <p className="font-mono text-[11px] text-ink-soft">{formatRelativeDate(log.createdAt)}</p>

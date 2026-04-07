@@ -28,7 +28,7 @@ export function RunSummaryPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4">
-      <header className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <header className="depth-panel rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("run.eyebrow")}</p>
@@ -57,7 +57,7 @@ export function RunSummaryPage({ station }: { station: StationState }) {
         ) : null}
       </header>
 
-      <article className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <article className="depth-panel rounded-[24px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         {summariesQuery.isLoading ? (
           <p className="text-sm text-ink-soft">{t("run.loading")}</p>
         ) : rows.length === 0 ? (
@@ -71,7 +71,7 @@ export function RunSummaryPage({ station }: { station: StationState }) {
               const weight = severityWeight(severity);
 
               return (
-                <li key={String(summary.id)} className="rounded-xl border border-white/12 bg-black/22 p-4">
+                <li key={String(summary.id)} className="rounded-[18px] border border-white/12 bg-black/22 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm text-ink-strong">
                       {t("run.tick")} {summary.tickSeconds}s | {t("run.incidents")} {summary.incidentCount}

@@ -49,18 +49,19 @@ export function SettingsPage({ station }: SettingsPageProps) {
 
   return (
     <section className="grid gap-4">
-      <header className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <header className="depth-panel rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("settings.eyebrow")}</p>
             <h2 className="mt-1 font-display text-2xl text-ink-strong">{t("settings.title")}</h2>
+            <p className="mt-1 text-sm text-ink-soft">{t("settings.subtitle")}</p>
           </div>
           <Settings2 className="h-6 w-6 text-accent-sky" />
         </div>
       </header>
 
-      <article className="depth-panel grid gap-4 rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)] lg:grid-cols-2">
-        <div className="grid gap-3 rounded-xl border border-white/10 bg-black/18 p-4">
+      <article className="depth-panel grid gap-4 rounded-[24px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)] lg:grid-cols-2">
+        <div className="grid gap-3 rounded-[18px] border border-white/10 bg-black/18 p-4">
           <h3 className="font-display text-lg text-ink-strong">{t("settings.audio.title")}</h3>
 
           <label className="flex items-center justify-between rounded-xl border border-white/12 bg-black/20 px-3 py-2 text-sm text-ink-normal">
@@ -107,10 +108,22 @@ export function SettingsPage({ station }: SettingsPageProps) {
             />
           </label>
 
+          <button
+            type="button"
+            onClick={() => {
+              audio.playEffect("hover");
+              window.setTimeout(() => audio.playEffect("click"), 120);
+              window.setTimeout(() => audio.playEffect("success"), 280);
+            }}
+            className="rounded-full border border-accent-sky/45 bg-accent-sky/10 px-3 py-1.5 text-sm text-accent-sky transition hover:bg-accent-sky/18"
+          >
+            {t("settings.audio.preview")}
+          </button>
+
           <p className="text-xs text-ink-soft">{audio.isAudioReady ? t("settings.audio.ready") : t("settings.audio.pending")}</p>
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-white/10 bg-black/18 p-4">
+        <div className="grid gap-3 rounded-[18px] border border-white/10 bg-black/18 p-4">
           <h3 className="font-display text-lg text-ink-strong">{t("settings.visual.title")}</h3>
 
           <label className="flex items-center justify-between rounded-xl border border-white/12 bg-black/20 px-3 py-2 text-sm text-ink-normal">
@@ -160,7 +173,7 @@ export function SettingsPage({ station }: SettingsPageProps) {
         </div>
       </article>
 
-      <article className="depth-panel rounded-[22px] border border-accent-red/38 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <article className="depth-panel rounded-[24px] border border-accent-red/38 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <h3 className="font-display text-lg text-accent-red">{t("settings.reset.title")}</h3>
         <p className="mt-2 text-sm text-ink-normal">{t("settings.reset.body")}</p>
 
@@ -191,13 +204,13 @@ export function SettingsPage({ station }: SettingsPageProps) {
         {resetMutation.error ? <p className="mt-2 text-sm text-accent-red">{getErrorMessage(resetMutation.error)}</p> : null}
       </article>
 
-      <article className="depth-panel rounded-[22px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
+      <article className="depth-panel rounded-[24px] border border-white/14 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <h3 className="font-display text-lg text-ink-strong">{t("settings.credits.title")}</h3>
         <p className="mt-2 text-sm text-ink-normal">{t("settings.credits.body")}</p>
 
         <ul className="mt-4 grid gap-3">
           {sceneCredits.map((credit) => (
-            <li key={credit.sourceUrl} className="rounded-xl border border-white/12 bg-black/20 p-3">
+            <li key={credit.sourceUrl} className="rounded-[18px] border border-white/12 bg-black/20 p-3">
               <p className="text-sm text-ink-strong">{credit.label}</p>
               <p className="mt-1 text-xs text-ink-soft">{credit.author}</p>
               <p className="text-xs text-ink-soft">{credit.license}</p>

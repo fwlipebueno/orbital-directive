@@ -31,11 +31,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   entry: {
     id: "entry",
     title: "Orbital Access",
-    subtitle: "Autorização de comando",
+    subtitle: "Authorization corridor",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg",
-    focal: "center 40%",
+    focal: "center 38%",
     overlay:
-      "linear-gradient(180deg, rgba(3,8,16,0.32), rgba(2,7,14,0.76)), radial-gradient(circle at 50% 82%, rgba(122,208,255,0.34), transparent 54%)",
+      "linear-gradient(180deg, rgba(3,8,16,0.24), rgba(2,7,14,0.8)), radial-gradient(circle at 50% 80%, rgba(122,208,255,0.34), transparent 56%), radial-gradient(circle at 82% 20%, rgba(255,240,210,0.12), transparent 32%)",
     credit: {
       label: "The Earth seen from Apollo 17",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:The_Earth_seen_from_Apollo_17.jpg",
@@ -46,11 +46,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   dashboard: {
     id: "dashboard",
     title: "Orbital Theater",
-    subtitle: "Janela principal da missão",
+    subtitle: "Primary mission viewport",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/7/77/ISS066-E-94036_-_View_of_Earth.jpg",
-    focal: "center 46%",
+    focal: "center 42%",
     overlay:
-      "linear-gradient(180deg, rgba(2,7,14,0.2), rgba(2,7,14,0.74)), radial-gradient(circle at 54% 74%, rgba(129,196,255,0.36), transparent 56%)",
+      "linear-gradient(180deg, rgba(2,7,14,0.14), rgba(2,7,14,0.78)), radial-gradient(circle at 54% 74%, rgba(129,196,255,0.42), transparent 54%), radial-gradient(circle at 20% 10%, rgba(255,240,214,0.16), transparent 42%)",
     credit: {
       label: "ISS066-E-94036 · View of Earth",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:ISS066-E-94036_-_View_of_Earth.jpg",
@@ -61,11 +61,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   modules: {
     id: "modules",
     title: "Engineering Orbit",
-    subtitle: "Malha de subsistemas",
+    subtitle: "Living subsystem topology",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/3/30/Earthrise_-_Apollo_8_%289460163430%29.jpg",
-    focal: "center 56%",
+    focal: "center 58%",
     overlay:
-      "linear-gradient(180deg, rgba(3,7,16,0.34), rgba(2,6,13,0.78)), radial-gradient(circle at 70% 24%, rgba(124,176,255,0.22), transparent 46%)",
+      "linear-gradient(180deg, rgba(3,7,16,0.28), rgba(2,6,13,0.82)), radial-gradient(circle at 70% 24%, rgba(124,176,255,0.24), transparent 42%), radial-gradient(circle at 18% 72%, rgba(112,212,196,0.16), transparent 38%)",
     credit: {
       label: "Earthrise · Apollo 8",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:Earthrise_-_Apollo_8_(9460163430).jpg",
@@ -76,11 +76,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   research: {
     id: "research",
     title: "Research Lattice",
-    subtitle: "Laboratório orbital",
+    subtitle: "Orbital discovery chamber",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/9/97/NGC_7293.jpg",
-    focal: "center 44%",
+    focal: "center 48%",
     overlay:
-      "linear-gradient(180deg, rgba(5,8,18,0.28), rgba(4,8,16,0.78)), radial-gradient(circle at 52% 34%, rgba(255,186,117,0.2), transparent 52%)",
+      "linear-gradient(180deg, rgba(5,8,18,0.24), rgba(4,8,16,0.8)), radial-gradient(circle at 52% 34%, rgba(255,186,117,0.26), transparent 52%), radial-gradient(circle at 24% 18%, rgba(120,194,255,0.18), transparent 36%)",
     credit: {
       label: "NGC 7293 (Helix Nebula)",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:NGC_7293.jpg",
@@ -91,11 +91,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   incidents: {
     id: "incidents",
     title: "Containment Board",
-    subtitle: "Resposta tática a incidentes",
+    subtitle: "Tactical incident response",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/c/ce/ISS056-E-96100_-_View_of_Earth.jpg",
-    focal: "center 56%",
+    focal: "center 54%",
     overlay:
-      "linear-gradient(180deg, rgba(8,10,15,0.28), rgba(7,8,13,0.82)), radial-gradient(circle at 62% 22%, rgba(242,185,93,0.24), transparent 48%)",
+      "linear-gradient(180deg, rgba(8,10,15,0.22), rgba(7,8,13,0.84)), radial-gradient(circle at 62% 22%, rgba(242,185,93,0.28), transparent 48%), radial-gradient(circle at 24% 76%, rgba(255,122,122,0.16), transparent 34%)",
     credit: {
       label: "ISS056-E-96100 · View of Earth",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:ISS056-E-96100_-_View_of_Earth.jpg",
@@ -106,11 +106,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   logs: {
     id: "logs",
     title: "Mission Archive",
-    subtitle: "Histórico operacional",
+    subtitle: "Operational memory lane",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/3/30/Earthrise_-_Apollo_8_%289460163430%29.jpg",
-    focal: "center 42%",
+    focal: "center 46%",
     overlay:
-      "linear-gradient(180deg, rgba(3,8,16,0.3), rgba(3,7,14,0.82)), radial-gradient(circle at 26% 70%, rgba(120,194,255,0.2), transparent 46%)",
+      "linear-gradient(180deg, rgba(3,8,16,0.22), rgba(3,7,14,0.84)), radial-gradient(circle at 26% 70%, rgba(120,194,255,0.24), transparent 46%)",
     credit: {
       label: "Earthrise · Apollo 8",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:Earthrise_-_Apollo_8_(9460163430).jpg",
@@ -121,11 +121,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   debrief: {
     id: "debrief",
     title: "Cycle Debrief",
-    subtitle: "Leitura de trajetória",
+    subtitle: "Trajectory review",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg",
-    focal: "center 24%",
+    focal: "center 28%",
     overlay:
-      "linear-gradient(180deg, rgba(3,8,16,0.28), rgba(3,7,14,0.8)), radial-gradient(circle at 72% 20%, rgba(110,191,255,0.22), transparent 48%)",
+      "linear-gradient(180deg, rgba(3,8,16,0.22), rgba(3,7,14,0.84)), radial-gradient(circle at 72% 20%, rgba(110,191,255,0.24), transparent 44%)",
     credit: {
       label: "The Earth seen from Apollo 17",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:The_Earth_seen_from_Apollo_17.jpg",
@@ -136,11 +136,11 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
   settings: {
     id: "settings",
     title: "Mission Settings",
-    subtitle: "Ajustes de conforto e comando",
+    subtitle: "Comfort and command profile",
     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/9/97/NGC_7293.jpg",
-    focal: "center 58%",
+    focal: "center 54%",
     overlay:
-      "linear-gradient(180deg, rgba(4,8,16,0.36), rgba(3,7,14,0.84)), radial-gradient(circle at 50% 28%, rgba(255,174,117,0.14), transparent 52%)",
+      "linear-gradient(180deg, rgba(4,8,16,0.3), rgba(3,7,14,0.84)), radial-gradient(circle at 50% 28%, rgba(255,174,117,0.17), transparent 52%), radial-gradient(circle at 78% 74%, rgba(122,208,255,0.12), transparent 32%)",
     credit: {
       label: "NGC 7293 (Helix Nebula)",
       sourceUrl: "https://commons.wikimedia.org/wiki/File:NGC_7293.jpg",

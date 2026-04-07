@@ -8,7 +8,7 @@ export function LoadingScreen({ label }: { label?: string }) {
     <main className="command-grid relative flex min-h-screen items-center justify-center overflow-hidden px-6 text-ink-normal">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(122,208,255,0.15),transparent_38%)]" />
 
-      <section className="panel relative w-full max-w-2xl overflow-hidden p-7 text-center lg:p-10">
+      <section className="panel relative w-full max-w-2xl overflow-hidden rounded-[26px] p-7 text-center lg:p-10">
         <div className="absolute -top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(68,201,179,0.2),transparent_70%)]" />
 
         <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-accent-sky/35 bg-white/[0.02]">

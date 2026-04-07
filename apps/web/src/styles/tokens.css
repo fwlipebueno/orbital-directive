@@ -1,23 +1,34 @@
 :root {
-  --bg-deep: #060d18;
-  --bg-panel: #111c2f;
-  --bg-elevated: #1a2740;
+  --bg-deep: #030915;
+  --bg-panel: #0b1526;
+  --bg-elevated: #12203a;
   --accent-sky: #7ad0ff;
-  --accent-teal: #44c9b3;
-  --accent-amber: #f2b95d;
-  --accent-red: #ff7f7f;
+  --accent-teal: #4fd7bb;
+  --accent-amber: #f4c47b;
+  --accent-red: #ff8e8e;
   --ink-strong: #f2f8ff;
-  --ink-normal: #c7d4e6;
-  --ink-soft: #7f90a7;
-  --grid-glow: rgba(126, 193, 255, 0.12);
+  --ink-normal: #c8d7eb;
+  --ink-soft: #7d90a8;
+  --grid-glow: rgba(126, 193, 255, 0.14);
+  --space-card: 1rem;
+  --hud-radius: 1.18rem;
+  --hud-radius-lg: 1.6rem;
+  --hud-stroke: rgba(154, 194, 230, 0.26);
+  --hud-glass: linear-gradient(170deg, rgba(10, 20, 37, 0.66), rgba(4, 10, 21, 0.88));
+  --hud-shadow: 0 24px 54px rgba(2, 6, 14, 0.55);
+  --theater-shadow: 0 34px 90px rgba(2, 6, 14, 0.64);
 }
 
 [data-density="compact"] {
   --space-card: 0.85rem;
+  --hud-radius: 1rem;
+  --hud-radius-lg: 1.3rem;
 }
 
 [data-density="comfortable"] {
   --space-card: 1.15rem;
+  --hud-radius: 1.22rem;
+  --hud-radius-lg: 1.7rem;
 }
 
 [data-reduced-sensory="true"] * {

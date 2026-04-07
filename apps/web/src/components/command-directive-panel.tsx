@@ -35,15 +35,20 @@ function OptionChip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3 py-2 text-xs transition ${
+      className={cn(
+        "rounded-full border px-3 py-2 text-xs transition",
         active
-          ? "border-accent-sky/70 bg-accent-sky/20 text-ink-strong shadow-[0_0_20px_rgba(122,208,255,0.15)]"
-          : "border-white/16 bg-black/16 text-ink-soft hover:border-accent-sky/35 hover:text-ink-normal"
-      }`}
+          ? "border-accent-sky/70 bg-accent-sky/20 text-ink-strong shadow-[0_0_20px_rgba(122,208,255,0.16)]"
+          : "border-white/16 bg-black/20 text-ink-soft hover:border-accent-sky/35 hover:text-ink-normal"
+      )}
     >
       {label}
     </button>
   );
+}
+
+function cn(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
 }
 
 export function CommandDirectivePanel({
@@ -70,17 +75,18 @@ export function CommandDirectivePanel({
     powerProfile !== state.powerProfile || subsystemFocus !== state.subsystemFocus || thermalPolicy !== state.thermalPolicy;
 
   return (
-    <section className="command-console grid gap-4 rounded-[22px] border border-white/15 bg-[linear-gradient(180deg,rgba(11,21,36,0.86),rgba(8,15,27,0.95))] p-4">
+    <section className="command-console grid gap-4 rounded-[24px] border border-white/18 bg-[linear-gradient(180deg,rgba(8,18,32,0.84),rgba(5,11,21,0.96))] p-4">
       <header className="flex items-center justify-between gap-2">
         <div>
           <p className="text-[11px] uppercase tracking-[0.17em] text-ink-soft">{t("dashboard.command.eyebrow")}</p>
           <h3 className="mt-1 font-display text-xl text-ink-strong">{t("dashboard.command.title")}</h3>
+          <p className="mt-1 text-xs text-ink-soft">{t("dashboard.command.subtitle")}</p>
         </div>
         <SlidersHorizontal className="h-5 w-5 text-accent-sky" />
       </header>
 
       <div className="grid gap-3">
-        <div className="rounded-2xl border border-white/10 bg-black/16 p-3">
+        <div className="rounded-2xl border border-white/12 bg-black/20 p-3">
           <p className="mb-2 text-xs uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.powerProfile")}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {powerProfileKeys.map((key) => (
@@ -94,7 +100,7 @@ export function CommandDirectivePanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/16 p-3">
+        <div className="rounded-2xl border border-white/12 bg-black/20 p-3">
           <p className="mb-2 text-xs uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.subsystemFocus")}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {subsystemFocusKeys.map((key) => (
@@ -108,7 +114,7 @@ export function CommandDirectivePanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/16 p-3">
+        <div className="rounded-2xl border border-white/12 bg-black/20 p-3">
           <p className="mb-2 text-xs uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.operationalPriority")}</p>
           <div className="grid gap-2 sm:grid-cols-3">
             {thermalPolicyKeys.map((key) => (
@@ -130,7 +136,7 @@ export function CommandDirectivePanel({
           onClick={() => {
             void onUpdateState({ powerProfile, subsystemFocus, thermalPolicy });
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-sky/55 bg-accent-sky/10 px-3 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/16 disabled:opacity-45"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-sky/55 bg-accent-sky/12 px-3 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/18 disabled:opacity-45"
         >
           <Zap className="h-4 w-4" />
           {t("dashboard.command.applyProfile")}
@@ -142,7 +148,7 @@ export function CommandDirectivePanel({
           onClick={() => {
             void onOrbitalBurn();
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-amber/55 bg-accent-amber/10 px-3 py-2 text-sm font-medium text-accent-amber transition hover:bg-accent-amber/16 disabled:opacity-45"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-amber/55 bg-accent-amber/12 px-3 py-2 text-sm font-medium text-accent-amber transition hover:bg-accent-amber/18 disabled:opacity-45"
         >
           <Flame className="h-4 w-4" />
           {t("dashboard.command.orbitalBurn")}
@@ -154,7 +160,7 @@ export function CommandDirectivePanel({
           onClick={() => {
             void onDeployReserve();
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-teal/55 bg-accent-teal/10 px-3 py-2 text-sm font-medium text-accent-teal transition hover:bg-accent-teal/16 disabled:opacity-45"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-teal/55 bg-accent-teal/12 px-3 py-2 text-sm font-medium text-accent-teal transition hover:bg-accent-teal/18 disabled:opacity-45"
         >
           <ShieldPlus className="h-4 w-4" />
           {t("dashboard.command.reserve")}
@@ -162,18 +168,18 @@ export function CommandDirectivePanel({
       </div>
 
       <div className="grid gap-2 text-xs text-ink-soft md:grid-cols-2">
-        <p>
+        <p className="rounded-lg border border-white/10 bg-black/18 px-2 py-1.5">
           {t("dashboard.command.orbitalBurnCost")}: {formatNumber(state.orbitalBurn.energyCost, 0)} E /{" "}
           {formatNumber(state.orbitalBurn.creditsCost, 0)} C
         </p>
-        <p>
+        <p className="rounded-lg border border-white/10 bg-black/18 px-2 py-1.5">
           {t("dashboard.command.reserveCost")}: {formatNumber(state.emergencyReserve.creditsCost, 0)} C
         </p>
-        <p>
+        <p className="rounded-lg border border-white/10 bg-black/18 px-2 py-1.5">
           {t("dashboard.command.orbitalBurnCooldown")}:{" "}
           {state.orbitalBurn.ready ? t("dashboard.command.ready") : `${state.orbitalBurn.cooldownSecondsRemaining}s`}
         </p>
-        <p>
+        <p className="rounded-lg border border-white/10 bg-black/18 px-2 py-1.5">
           {t("dashboard.command.reserveCooldown")}:{" "}
           {state.emergencyReserve.ready
             ? t("dashboard.command.ready")

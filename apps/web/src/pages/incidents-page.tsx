@@ -17,15 +17,16 @@ export function IncidentsPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4">
-      <header className="panel flex items-center justify-between">
+      <header className="depth-panel flex items-center justify-between rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("incidents.eyebrow")}</p>
           <h2 className="font-display text-2xl">{t("incidents.title")}</h2>
+          <p className="mt-1 text-sm text-ink-soft">{t("incidents.subtitle")}</p>
         </div>
         <AlertCircle className="h-6 w-6 text-accent-amber" />
       </header>
 
-      <article className="incident-hub rounded-[22px] border border-white/14 bg-[linear-gradient(180deg,rgba(10,18,31,0.74),rgba(7,13,23,0.9))] p-4">
+      <article className="incident-hub rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(10,18,31,0.76),rgba(7,13,23,0.92))] p-4">
         {openIncidents.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-ink-normal">{t("incidents.stable")}</div>
         ) : (
@@ -33,7 +34,7 @@ export function IncidentsPage({ station }: { station: StationState }) {
             {openIncidents.map((incident) => (
               <article
                 key={incident.id}
-                className="rounded-xl border border-accent-amber/30 bg-[linear-gradient(180deg,rgba(44,33,18,0.3),rgba(19,14,8,0.3))] p-3"
+                className="rounded-[18px] border border-accent-amber/30 bg-[linear-gradient(180deg,rgba(44,33,18,0.32),rgba(19,14,8,0.36))] p-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -60,7 +61,7 @@ export function IncidentsPage({ station }: { station: StationState }) {
                         audio.playEffect("error");
                       }
                     }}
-                    className="rounded-lg border border-accent-amber/60 px-3 py-1.5 text-xs text-accent-amber transition hover:bg-accent-amber/10 disabled:opacity-60"
+                    className="rounded-full border border-accent-amber/60 px-3 py-1.5 text-xs text-accent-amber transition hover:bg-accent-amber/10 disabled:opacity-60"
                   >
                     {t("incidents.resolve")}
                   </button>

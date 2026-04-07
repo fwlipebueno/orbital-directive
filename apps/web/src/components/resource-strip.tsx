@@ -49,38 +49,41 @@ function tone(percent: number): string {
 
 function barTone(percent: number): string {
   if (percent < 25) {
-    return "bg-accent-red";
+    return "from-accent-red/85 to-accent-red/40";
   }
   if (percent < 50) {
-    return "bg-accent-amber";
+    return "from-accent-amber/85 to-accent-amber/40";
   }
   if (percent < 70) {
-    return "bg-accent-sky";
+    return "from-accent-sky/85 to-accent-sky/40";
   }
-  return "bg-accent-teal";
+  return "from-accent-teal/85 to-accent-teal/40";
 }
 
 export function ResourceStrip({ resources: snapshot }: { resources: StationState["resources"] }) {
   const { t } = useI18n();
 
   return (
-    <section className="resource-ribbon rounded-[20px] border border-white/12 bg-[linear-gradient(180deg,rgba(8,17,30,0.76),rgba(8,15,26,0.9))] px-3 py-3">
+    <section className="resource-ribbon rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(8,17,30,0.78),rgba(6,13,24,0.92))] px-3 py-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {resources.map((resource) => {
           const rawValue = snapshot[resource] ?? 0;
           const percent = getValuePercent(resource, rawValue);
           const Icon = iconMap[resource];
           return (
-            <article key={resource} className="hud-resource px-3 py-2.5">
+            <article key={resource} className="hud-resource signal-meter px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-soft">{resourceLabel(t, resource)}</p>
+                <p className="text-[10px] uppercase tracking-[0.16em] text-ink-soft">{resourceLabel(t, resource)}</p>
                 <Icon className={cn("h-4 w-4", tone(percent))} />
               </div>
               <p className={cn("mt-1 font-mono text-lg", tone(percent))}>
                 {resource === "credits" || resource === "research" ? formatNumber(rawValue, 0) : formatNumber(rawValue, 1)}
               </p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-white/10 bg-white/[0.06]">
-                <div className={cn("h-full rounded-full", barTone(percent))} style={{ width: `${Math.max(3, percent)}%` }} />
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
+                <div
+                  className={cn("h-full rounded-full bg-gradient-to-r", barTone(percent))}
+                  style={{ width: `${Math.max(4, percent)}%` }}
+                />
               </div>
             </article>
           );

@@ -29,8 +29,8 @@ export default {
         focus: "0 0 0 2px rgba(113, 204, 255, 0.55)"
       },
       fontFamily: {
-        display: ["Sora", "Space Grotesk", "Avenir Next", "Segoe UI", "sans-serif"],
-        body: ["IBM Plex Sans", "Manrope", "Avenir Next", "Segoe UI", "sans-serif"],
+        display: ["Oxanium", "Space Grotesk", "Avenir Next", "Segoe UI", "sans-serif"],
+        body: ["Plus Jakarta Sans", "Manrope", "Avenir Next", "Segoe UI", "sans-serif"],
         mono: ["IBM Plex Mono", "JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"]
       }
     }

@@ -51,7 +51,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <section className="w-full max-w-2xl rounded-[24px] border border-white/20 bg-[linear-gradient(180deg,rgba(8,18,31,0.92),rgba(6,12,22,0.96))] p-5 shadow-[0_30px_80px_rgba(1,5,12,0.75)] sm:p-6">
+      <section className="w-full max-w-2xl rounded-[26px] border border-white/20 bg-[linear-gradient(180deg,rgba(8,18,31,0.92),rgba(6,12,22,0.97))] p-5 shadow-[0_30px_80px_rgba(1,5,12,0.75)] sm:p-6">
         <header className="mb-5 flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-ink-soft">{t("tutorial.eyebrow")}</p>
@@ -68,7 +68,14 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           </button>
         </header>
 
-        <article className="rounded-2xl border border-white/12 bg-black/25 p-4">
+        <div className="mb-3 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.05]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-accent-sky/80 via-accent-teal/80 to-accent-sky/80"
+            style={{ width: `${((index + 1) / steps.length) * 100}%` }}
+          />
+        </div>
+
+        <article className="rounded-[18px] border border-white/12 bg-black/25 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-ink-soft">
             {t("tutorial.step")} {index + 1}/{steps.length}
           </p>

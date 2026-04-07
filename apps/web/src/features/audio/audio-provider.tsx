@@ -1,4 +1,13 @@
-﻿import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PropsWithChildren
+} from "react";
 
 type EffectName = "hover" | "click" | "alert" | "success" | "error" | "unlock" | "incident";
 
@@ -23,17 +32,7 @@ interface AudioContextValue {
 
 type AmbientEngine = {
   intervalId: number | null;
-  stops: Set<() => void>;
-  progressionIndex: number;
-};
-
-type EffectConfig = {
-  startFrequency: number;
-  endFrequency: number;
-  duration: number;
-  type: OscillatorType;
-  gain: number;
-  harmonic?: number;
+  stop: () => void;
 };
 
 const STORAGE_KEY = "orbital-directive-audio";
@@ -48,6 +47,23 @@ const defaultSettings: AudioSettings = {
 
 const AudioControllerContext = createContext<AudioContextValue | null>(null);
 
+type AudioContextConstructor = typeof AudioContext;
+
+function getAudioContextConstructor(): AudioContextConstructor | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  const maybeWindow = window as Window & typeof globalThis & { webkitAudioContext?: AudioContextConstructor };
+  return maybeWindow.AudioContext ?? maybeWindow.webkitAudioContext;
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, value));
+}
+
 function readStoredSettings(): AudioSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -58,8 +74,8 @@ function readStoredSettings(): AudioSettings {
     const parsed = JSON.parse(raw) as Partial<AudioSettings>;
     return {
       enabled: typeof parsed.enabled === "boolean" ? parsed.enabled : defaultSettings.enabled,
-      musicVolume: typeof parsed.musicVolume === "number" ? parsed.musicVolume : defaultSettings.musicVolume,
-      effectsVolume: typeof parsed.effectsVolume === "number" ? parsed.effectsVolume : defaultSettings.effectsVolume,
+      musicVolume: typeof parsed.musicVolume === "number" ? clamp01(parsed.musicVolume) : defaultSettings.musicVolume,
+      effectsVolume: typeof parsed.effectsVolume === "number" ? clamp01(parsed.effectsVolume) : defaultSettings.effectsVolume,
       muted: typeof parsed.muted === "boolean" ? parsed.muted : defaultSettings.muted,
       reducedSensoryMode:
         typeof parsed.reducedSensoryMode === "boolean" ? parsed.reducedSensoryMode : defaultSettings.reducedSensoryMode
@@ -73,93 +89,81 @@ function saveSettings(settings: AudioSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-function getEffectConfig(effect: EffectName): EffectConfig {
-  switch (effect) {
-    case "hover":
-      return { startFrequency: 760, endFrequency: 690, duration: 0.08, type: "sine", gain: 0.06 };
-    case "click":
-      return { startFrequency: 510, endFrequency: 430, duration: 0.1, type: "sine", gain: 0.08, harmonic: 680 };
-    case "alert":
-      return { startFrequency: 230, endFrequency: 200, duration: 0.18, type: "triangle", gain: 0.09, harmonic: 280 };
-    case "success":
-      return { startFrequency: 360, endFrequency: 460, duration: 0.18, type: "sine", gain: 0.1, harmonic: 580 };
-    case "error":
-      return { startFrequency: 220, endFrequency: 170, duration: 0.17, type: "triangle", gain: 0.11 };
-    case "unlock":
-      return { startFrequency: 280, endFrequency: 420, duration: 0.2, type: "sine", gain: 0.1, harmonic: 560 };
-    case "incident":
-      return { startFrequency: 280, endFrequency: 240, duration: 0.22, type: "triangle", gain: 0.09, harmonic: 350 };
-    default:
-      return { startFrequency: 300, endFrequency: 300, duration: 0.1, type: "sine", gain: 0.08 };
+function createImpulseResponse(context: AudioContext, seconds = 1.8, decay = 2.6): AudioBuffer {
+  const sampleRate = context.sampleRate;
+  const length = Math.floor(sampleRate * seconds);
+  const impulse = context.createBuffer(2, length, sampleRate);
+
+  for (let channel = 0; channel < 2; channel += 1) {
+    const data = impulse.getChannelData(channel);
+    for (let index = 0; index < length; index += 1) {
+      const t = index / length;
+      data[index] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+    }
   }
+
+  return impulse;
 }
 
-function createPadVoice(
+function createNoiseBuffer(context: AudioContext, seconds = 2): AudioBuffer {
+  const length = Math.floor(context.sampleRate * seconds);
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const channel = buffer.getChannelData(0);
+  for (let index = 0; index < length; index += 1) {
+    channel[index] = (Math.random() * 2 - 1) * 0.32;
+  }
+  return buffer;
+}
+
+function playTone(
   context: AudioContext,
-  destination: AudioNode,
-  startAt: number,
-  frequency: number,
-  gainScale: number,
-  reducedSensoryMode: boolean
-): () => void {
-  const voiceGain = context.createGain();
+  output: AudioNode,
+  {
+    startAt,
+    duration,
+    type,
+    frequency,
+    endFrequency,
+    gain,
+    filterFrequency
+  }: {
+    startAt: number;
+    duration: number;
+    type: OscillatorType;
+    frequency: number;
+    endFrequency?: number;
+    gain: number;
+    filterFrequency: number;
+  }
+): void {
+  const oscillator = context.createOscillator();
+  const amp = context.createGain();
   const filter = context.createBiquadFilter();
-  const oscA = context.createOscillator();
-  const oscB = context.createOscillator();
 
-  oscA.type = "sine";
-  oscB.type = "triangle";
-
-  oscA.frequency.setValueAtTime(frequency, startAt);
-  oscB.frequency.setValueAtTime(frequency * 2, startAt);
-  oscB.detune.setValueAtTime(4.5, startAt);
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  if (endFrequency) {
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), startAt + duration);
+  }
 
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(reducedSensoryMode ? 560 : 980, startAt);
-  filter.Q.value = 0.22;
+  filter.frequency.setValueAtTime(filterFrequency, startAt);
 
-  const attack = reducedSensoryMode ? 1.4 : 2.2;
-  const sustain = reducedSensoryMode ? 0.035 : 0.052;
-  const release = reducedSensoryMode ? 1.8 : 2.6;
-  const endAt = startAt + attack + 3.2 + release;
+  amp.gain.setValueAtTime(0.0001, startAt);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), startAt + 0.018);
+  amp.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
 
-  voiceGain.gain.setValueAtTime(0.0001, startAt);
-  voiceGain.gain.exponentialRampToValueAtTime(Math.max(0.00012, sustain * gainScale), startAt + attack);
-  voiceGain.gain.setValueAtTime(Math.max(0.00012, sustain * gainScale), startAt + attack + 3.2);
-  voiceGain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+  oscillator.connect(filter);
+  filter.connect(amp);
+  amp.connect(output);
 
-  oscA.connect(filter);
-  oscB.connect(filter);
-  filter.connect(voiceGain);
-  voiceGain.connect(destination);
-
-  oscA.start(startAt);
-  oscB.start(startAt);
-  oscA.stop(endAt + 0.05);
-  oscB.stop(endAt + 0.05);
-
-  const stop = () => {
-    const now = context.currentTime;
-    voiceGain.gain.cancelScheduledValues(now);
-    voiceGain.gain.setTargetAtTime(0.0001, now, 0.12);
-    try {
-      oscA.stop(now + 0.3);
-      oscB.stop(now + 0.3);
-    } catch {
-      // Oscillator may already be stopped.
-    }
-  };
-
-  const cleanup = () => {
-    oscA.disconnect();
-    oscB.disconnect();
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.03);
+  oscillator.onended = () => {
+    oscillator.disconnect();
     filter.disconnect();
-    voiceGain.disconnect();
+    amp.disconnect();
   };
-
-  oscA.onended = cleanup;
-
-  return stop;
 }
 
 export function AudioProvider({ children }: PropsWithChildren) {
@@ -170,6 +174,8 @@ export function AudioProvider({ children }: PropsWithChildren) {
   const masterGainRef = useRef<GainNode | null>(null);
   const musicGainRef = useRef<GainNode | null>(null);
   const effectsGainRef = useRef<GainNode | null>(null);
+  const convolverRef = useRef<ConvolverNode | null>(null);
+  const reverbGainRef = useRef<GainNode | null>(null);
   const ambientRef = useRef<AmbientEngine | null>(null);
 
   const stopAmbient = useCallback(() => {
@@ -178,36 +184,45 @@ export function AudioProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    if (ambient.intervalId !== null) {
-      window.clearInterval(ambient.intervalId);
-    }
-
-    for (const stop of ambient.stops) {
-      stop();
-    }
-
-    ambient.stops.clear();
-    ambient.intervalId = null;
+    ambient.stop();
     ambientRef.current = null;
   }, []);
 
   const ensureGraph = useCallback(() => {
+    if (audioContextRef.current && masterGainRef.current && musicGainRef.current && effectsGainRef.current) {
+      return true;
+    }
+
+    const Ctor = getAudioContextConstructor();
+    if (!Ctor) {
+      return false;
+    }
+
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
+      audioContextRef.current = new Ctor();
     }
 
     const context = audioContextRef.current;
+    if (!context) {
+      return false;
+    }
+
     if (!masterGainRef.current) {
       const master = context.createGain();
       const music = context.createGain();
       const effects = context.createGain();
       const compressor = context.createDynamicsCompressor();
+      const convolver = context.createConvolver();
+      const reverb = context.createGain();
 
-      compressor.threshold.value = -26;
-      compressor.knee.value = 24;
-      compressor.ratio.value = 3;
-      compressor.attack.value = 0.018;
-      compressor.release.value = 0.24;
+      compressor.threshold.value = -24;
+      compressor.knee.value = 22;
+      compressor.ratio.value = 2.8;
+      compressor.attack.value = 0.014;
+      compressor.release.value = 0.19;
+
+      convolver.buffer = createImpulseResponse(context);
+      reverb.gain.value = 0.22;
 
       master.gain.value = 0;
       music.gain.value = 0;
@@ -215,76 +230,193 @@ export function AudioProvider({ children }: PropsWithChildren) {
 
       music.connect(master);
       effects.connect(master);
+      effects.connect(convolver);
+      convolver.connect(reverb);
+      reverb.connect(master);
       master.connect(compressor);
       compressor.connect(context.destination);
 
       masterGainRef.current = master;
       musicGainRef.current = music;
       effectsGainRef.current = effects;
+      convolverRef.current = convolver;
+      reverbGainRef.current = reverb;
     }
+
+    return true;
   }, []);
 
-  const refreshVolume = useCallback(() => {
+  const refreshMix = useCallback(() => {
     const context = audioContextRef.current;
     const master = masterGainRef.current;
     const music = musicGainRef.current;
     const effects = effectsGainRef.current;
+    const reverb = reverbGainRef.current;
 
-    if (!context || !master || !music || !effects) {
+    if (!context || !master || !music || !effects || !reverb) {
       return;
     }
 
     const shouldSilence = !settings.enabled || settings.muted;
-    const reducedFactor = settings.reducedSensoryMode ? 0.35 : 1;
+    const reducedFactor = settings.reducedSensoryMode ? 0.6 : 1;
 
     master.gain.setTargetAtTime(shouldSilence ? 0 : 1, context.currentTime, 0.18);
-    music.gain.setTargetAtTime(shouldSilence ? 0 : settings.musicVolume * reducedFactor, context.currentTime, 0.24);
+    music.gain.setTargetAtTime(shouldSilence ? 0 : settings.musicVolume * reducedFactor, context.currentTime, 0.26);
     effects.gain.setTargetAtTime(shouldSilence ? 0 : settings.effectsVolume * reducedFactor, context.currentTime, 0.2);
+    reverb.gain.setTargetAtTime(shouldSilence ? 0 : 0.18 * reducedFactor, context.currentTime, 0.3);
   }, [settings.enabled, settings.effectsVolume, settings.musicVolume, settings.muted, settings.reducedSensoryMode]);
 
   const startAmbient = useCallback(() => {
     const context = audioContextRef.current;
     const musicGain = musicGainRef.current;
-
     if (!context || !musicGain || ambientRef.current || !settings.enabled || settings.muted) {
       return;
     }
 
-    const progression = [98, 110, 123.47, 92.5, 103.83] as const;
-    const engine: AmbientEngine = {
-      intervalId: null,
-      stops: new Set<() => void>(),
-      progressionIndex: 0
+    const voiceBus = context.createGain();
+    const voiceFilter = context.createBiquadFilter();
+    const droneA = context.createOscillator();
+    const droneB = context.createOscillator();
+    const droneC = context.createOscillator();
+    const droneGainA = context.createGain();
+    const droneGainB = context.createGain();
+    const droneGainC = context.createGain();
+    const lfo = context.createOscillator();
+    const lfoGain = context.createGain();
+    const noise = context.createBufferSource();
+    const noiseFilter = context.createBiquadFilter();
+    const noiseGain = context.createGain();
+
+    const now = context.currentTime;
+    const reducedFactor = settings.reducedSensoryMode ? 0.65 : 1;
+
+    voiceBus.gain.setValueAtTime(0.0001, now);
+    voiceBus.gain.exponentialRampToValueAtTime(0.34 * reducedFactor, now + 2.4);
+
+    voiceFilter.type = "lowpass";
+    voiceFilter.frequency.setValueAtTime(settings.reducedSensoryMode ? 560 : 900, now);
+    voiceFilter.Q.value = 0.45;
+
+    droneA.type = "sine";
+    droneB.type = "triangle";
+    droneC.type = "sine";
+
+    droneA.frequency.setValueAtTime(74, now);
+    droneB.frequency.setValueAtTime(111, now);
+    droneC.frequency.setValueAtTime(148, now);
+
+    droneGainA.gain.value = 0.22 * reducedFactor;
+    droneGainB.gain.value = 0.08 * reducedFactor;
+    droneGainC.gain.value = 0.06 * reducedFactor;
+
+    lfo.type = "sine";
+    lfo.frequency.value = settings.reducedSensoryMode ? 0.026 : 0.045;
+    lfoGain.gain.value = settings.reducedSensoryMode ? 34 : 58;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(voiceFilter.frequency);
+
+    droneA.connect(droneGainA);
+    droneB.connect(droneGainB);
+    droneC.connect(droneGainC);
+    droneGainA.connect(voiceFilter);
+    droneGainB.connect(voiceFilter);
+    droneGainC.connect(voiceFilter);
+    voiceFilter.connect(voiceBus);
+    voiceBus.connect(musicGain);
+
+    noise.buffer = createNoiseBuffer(context, 2.6);
+    noise.loop = true;
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.setValueAtTime(settings.reducedSensoryMode ? 420 : 640, now);
+    noiseFilter.Q.value = 0.3;
+    noiseGain.gain.value = settings.reducedSensoryMode ? 0.005 : 0.01;
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(voiceBus);
+
+    droneA.start(now);
+    droneB.start(now);
+    droneC.start(now);
+    lfo.start(now);
+    noise.start(now);
+
+    const playAmbientPulse = () => {
+      const pulseStart = context.currentTime + 0.02;
+      const base = 196;
+      const interval = settings.reducedSensoryMode ? 1.498 : 1.333;
+      playTone(context, musicGain, {
+        startAt: pulseStart,
+        duration: settings.reducedSensoryMode ? 0.4 : 0.52,
+        type: "sine",
+        frequency: base,
+        endFrequency: base * 0.94,
+        gain: 0.012 * reducedFactor,
+        filterFrequency: 1400
+      });
+      playTone(context, musicGain, {
+        startAt: pulseStart + 0.18,
+        duration: settings.reducedSensoryMode ? 0.32 : 0.46,
+        type: "triangle",
+        frequency: base * interval,
+        endFrequency: base * interval * 0.95,
+        gain: 0.01 * reducedFactor,
+        filterFrequency: 1600
+      });
     };
 
-    const playStep = () => {
-      const maybeRoot = progression[engine.progressionIndex % progression.length];
-      if (typeof maybeRoot !== "number") {
-        return;
-      }
-      const root = maybeRoot;
-      const now = context.currentTime + 0.04;
-      const triad = [root, root * 1.25, root * 1.5];
+    const initialTimeout = window.setTimeout(playAmbientPulse, 2400);
+    const intervalId = window.setInterval(playAmbientPulse, settings.reducedSensoryMode ? 18000 : 12400);
 
-      for (const [index, note] of triad.entries()) {
-        const stop = createPadVoice(context, musicGain, now + index * 0.22, note, 1 - index * 0.18, settings.reducedSensoryMode);
-        engine.stops.add(stop);
-        window.setTimeout(() => {
-          engine.stops.delete(stop);
-        }, 7600);
+    const stop = () => {
+      window.clearTimeout(initialTimeout);
+      window.clearInterval(intervalId);
+
+      const fadeAt = context.currentTime;
+      voiceBus.gain.cancelScheduledValues(fadeAt);
+      voiceBus.gain.setTargetAtTime(0.0001, fadeAt, 0.26);
+      noiseGain.gain.cancelScheduledValues(fadeAt);
+      noiseGain.gain.setTargetAtTime(0.0001, fadeAt, 0.2);
+
+      try {
+        droneA.stop(fadeAt + 0.45);
+        droneB.stop(fadeAt + 0.45);
+        droneC.stop(fadeAt + 0.45);
+        lfo.stop(fadeAt + 0.45);
+        noise.stop(fadeAt + 0.45);
+      } catch {
+        // Sources may already be stopped.
       }
 
-      engine.progressionIndex += 1;
+      window.setTimeout(() => {
+        droneA.disconnect();
+        droneB.disconnect();
+        droneC.disconnect();
+        droneGainA.disconnect();
+        droneGainB.disconnect();
+        droneGainC.disconnect();
+        lfo.disconnect();
+        lfoGain.disconnect();
+        voiceFilter.disconnect();
+        voiceBus.disconnect();
+        noise.disconnect();
+        noiseFilter.disconnect();
+        noiseGain.disconnect();
+      }, 760);
     };
 
-    playStep();
-    engine.intervalId = window.setInterval(playStep, settings.reducedSensoryMode ? 9200 : 7600);
-
-    ambientRef.current = engine;
+    ambientRef.current = {
+      intervalId,
+      stop
+    };
   }, [settings.enabled, settings.muted, settings.reducedSensoryMode]);
 
   const unlockAudio = useCallback(async () => {
-    ensureGraph();
+    const graphReady = ensureGraph();
+    if (!graphReady) {
+      return;
+    }
+
     const context = audioContextRef.current;
     if (!context) {
       return;
@@ -295,42 +427,37 @@ export function AudioProvider({ children }: PropsWithChildren) {
     }
 
     setIsAudioReady(true);
-    setSettings((prev) => {
-      if (prev.enabled) {
-        return prev;
-      }
-      const next = { ...prev, enabled: true };
-      saveSettings(next);
-      return next;
-    });
   }, [ensureGraph]);
 
   const setAudioEnabled = useCallback(
     async (enabled: boolean) => {
+      setSettings((prev) => {
+        if (prev.enabled === enabled) {
+          return prev;
+        }
+        const next = { ...prev, enabled };
+        saveSettings(next);
+        return next;
+      });
+
       if (!enabled) {
         stopAmbient();
-        setSettings((prev) => {
-          if (!prev.enabled) {
-            return prev;
-          }
-          const next = { ...prev, enabled: false };
-          saveSettings(next);
-          return next;
-        });
+        const context = audioContextRef.current;
+        if (context && context.state === "running") {
+          window.setTimeout(() => {
+            if (context.state === "running") {
+              void context.suspend();
+            }
+          }, 280);
+        }
         return;
       }
 
-      try {
-        await unlockAudio();
-      } catch {
-        setSettings((prev) => {
-          const next = { ...prev, enabled: true };
-          saveSettings(next);
-          return next;
-        });
-      }
+      await unlockAudio();
+      refreshMix();
+      startAmbient();
     },
-    [stopAmbient, unlockAudio]
+    [refreshMix, startAmbient, stopAmbient, unlockAudio]
   );
 
   const toggleAudioEnabled = useCallback(async () => {
@@ -345,51 +472,158 @@ export function AudioProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const config = getEffectConfig(effect);
       const now = context.currentTime;
-      const gain = context.createGain();
-      const filter = context.createBiquadFilter();
-      const osc = context.createOscillator();
+      const scale = settings.reducedSensoryMode ? 0.68 : 1;
 
-      const scale = settings.reducedSensoryMode ? 0.55 : 1;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, config.gain * scale), now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + config.duration);
-
-      filter.type = "lowpass";
-      filter.frequency.setValueAtTime(settings.reducedSensoryMode ? 1200 : 2200, now);
-
-      osc.type = config.type;
-      osc.frequency.setValueAtTime(config.startFrequency, now);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(30, config.endFrequency), now + config.duration);
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(effectsGain);
-      osc.start(now);
-      osc.stop(now + config.duration + 0.03);
-
-      if (config.harmonic) {
-        const harmonic = context.createOscillator();
-        harmonic.type = "sine";
-        harmonic.frequency.setValueAtTime(config.harmonic, now + 0.01);
-        harmonic.connect(filter);
-        harmonic.start(now + 0.01);
-        harmonic.stop(now + config.duration);
-        harmonic.onended = () => harmonic.disconnect();
+      switch (effect) {
+        case "hover":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.08,
+            type: "sine",
+            frequency: 820,
+            endFrequency: 760,
+            gain: 0.028 * scale,
+            filterFrequency: 1900
+          });
+          break;
+        case "click":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.11,
+            type: "triangle",
+            frequency: 460,
+            endFrequency: 396,
+            gain: 0.055 * scale,
+            filterFrequency: 1800
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.02,
+            duration: 0.08,
+            type: "sine",
+            frequency: 710,
+            endFrequency: 640,
+            gain: 0.025 * scale,
+            filterFrequency: 2100
+          });
+          break;
+        case "success":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.13,
+            type: "sine",
+            frequency: 380,
+            endFrequency: 480,
+            gain: 0.058 * scale,
+            filterFrequency: 2100
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.12,
+            duration: 0.18,
+            type: "sine",
+            frequency: 480,
+            endFrequency: 620,
+            gain: 0.052 * scale,
+            filterFrequency: 2300
+          });
+          break;
+        case "unlock":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.12,
+            type: "triangle",
+            frequency: 300,
+            endFrequency: 410,
+            gain: 0.05 * scale,
+            filterFrequency: 1900
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.14,
+            duration: 0.22,
+            type: "sine",
+            frequency: 410,
+            endFrequency: 580,
+            gain: 0.06 * scale,
+            filterFrequency: 2400
+          });
+          break;
+        case "alert":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.16,
+            type: "triangle",
+            frequency: 236,
+            endFrequency: 214,
+            gain: 0.064 * scale,
+            filterFrequency: 1280
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.2,
+            duration: 0.16,
+            type: "triangle",
+            frequency: 236,
+            endFrequency: 214,
+            gain: 0.064 * scale,
+            filterFrequency: 1280
+          });
+          break;
+        case "incident":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.24,
+            type: "triangle",
+            frequency: 268,
+            endFrequency: 224,
+            gain: 0.072 * scale,
+            filterFrequency: 1360
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.12,
+            duration: 0.19,
+            type: "sine",
+            frequency: 512,
+            endFrequency: 402,
+            gain: 0.048 * scale,
+            filterFrequency: 1720
+          });
+          break;
+        case "error":
+        default:
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.15,
+            type: "triangle",
+            frequency: 208,
+            endFrequency: 170,
+            gain: 0.072 * scale,
+            filterFrequency: 1200
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.15,
+            duration: 0.2,
+            type: "sine",
+            frequency: 170,
+            endFrequency: 150,
+            gain: 0.048 * scale,
+            filterFrequency: 980
+          });
+          break;
       }
-
-      osc.onended = () => {
-        osc.disconnect();
-        filter.disconnect();
-        gain.disconnect();
-      };
     },
     [settings.enabled, settings.muted, settings.reducedSensoryMode]
   );
 
   const updateSettings = useCallback((next: Partial<AudioSettings>) => {
     setSettings((prev) => {
-      const merged = { ...prev, ...next };
+      const merged: AudioSettings = {
+        enabled: typeof next.enabled === "boolean" ? next.enabled : prev.enabled,
+        musicVolume: typeof next.musicVolume === "number" ? clamp01(next.musicVolume) : prev.musicVolume,
+        effectsVolume: typeof next.effectsVolume === "number" ? clamp01(next.effectsVolume) : prev.effectsVolume,
+        muted: typeof next.muted === "boolean" ? next.muted : prev.muted,
+        reducedSensoryMode:
+          typeof next.reducedSensoryMode === "boolean" ? next.reducedSensoryMode : prev.reducedSensoryMode
+      };
+
       if (
         merged.enabled === prev.enabled &&
         merged.musicVolume === prev.musicVolume &&
@@ -406,8 +640,8 @@ export function AudioProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    refreshVolume();
-  }, [refreshVolume]);
+    refreshMix();
+  }, [refreshMix]);
 
   useEffect(() => {
     if (!settings.enabled || isAudioReady) {
