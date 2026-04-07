@@ -1,0 +1,23 @@
+{
+  "name": "orbital-directive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orbital Directive monorepo",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @orbital/api --filter @orbital/web dev",
+    "dev:api": "pnpm --filter @orbital/api dev",
+    "dev:web": "pnpm --filter @orbital/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "check": "pnpm -r check",
+    "db:generate": "pnpm --filter @orbital/api db:generate",
+    "db:migrate": "pnpm --filter @orbital/api db:migrate",
+    "db:seed": "pnpm --filter @orbital/api db:seed",
+    "db:studio": "pnpm --filter @orbital/api db:studio"
+  }
+}
