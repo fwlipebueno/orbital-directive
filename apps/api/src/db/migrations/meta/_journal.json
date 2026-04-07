@@ -1,0 +1,21 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1770000000000,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770000001000,
+      "tag": "0001_command_state",
+      "breakpoints": true
+    }
+  ]
+}
+
