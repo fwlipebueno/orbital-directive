@@ -70,7 +70,11 @@ export function SettingsPage({ station }: SettingsPageProps) {
               type="checkbox"
               checked={audio.isAudioEnabled}
               onChange={async (event) => {
-                await audio.setAudioEnabled(event.target.checked);
+                const enabled = event.target.checked;
+                await audio.setAudioEnabled(enabled);
+                if (enabled) {
+                  audio.playEffect("intro");
+                }
               }}
             />
           </label>
@@ -83,7 +87,9 @@ export function SettingsPage({ station }: SettingsPageProps) {
               max={1}
               step={0.01}
               value={audio.settings.musicVolume}
-              onChange={(event) => audio.updateSettings({ musicVolume: Number(event.target.value) })}
+              onChange={(event) => {
+                audio.updateSettings({ musicVolume: Number(event.target.value) });
+              }}
             />
           </label>
 
@@ -95,7 +101,10 @@ export function SettingsPage({ station }: SettingsPageProps) {
               max={1}
               step={0.01}
               value={audio.settings.effectsVolume}
-              onChange={(event) => audio.updateSettings({ effectsVolume: Number(event.target.value) })}
+              onChange={(event) => {
+                audio.updateSettings({ effectsVolume: Number(event.target.value) });
+                audio.playEffect("hover");
+              }}
             />
           </label>
 
@@ -104,7 +113,12 @@ export function SettingsPage({ station }: SettingsPageProps) {
             <input
               type="checkbox"
               checked={audio.settings.muted}
-              onChange={(event) => audio.updateSettings({ muted: event.target.checked })}
+              onChange={(event) => {
+                audio.updateSettings({ muted: event.target.checked });
+                if (!event.target.checked) {
+                  audio.playEffect("confirm");
+                }
+              }}
             />
           </label>
 
@@ -112,8 +126,12 @@ export function SettingsPage({ station }: SettingsPageProps) {
             type="button"
             onClick={() => {
               audio.playEffect("hover");
-              window.setTimeout(() => audio.playEffect("click"), 120);
-              window.setTimeout(() => audio.playEffect("success"), 280);
+              window.setTimeout(() => audio.playEffect("click"), 100);
+              window.setTimeout(() => audio.playEffect("transition"), 210);
+              window.setTimeout(() => audio.playEffect("tactical"), 340);
+              window.setTimeout(() => audio.playEffect("warning"), 520);
+              window.setTimeout(() => audio.playEffect("emergency"), 680);
+              window.setTimeout(() => audio.playEffect("confirm"), 900);
             }}
             className="rounded-full border border-accent-sky/45 bg-accent-sky/10 px-3 py-1.5 text-sm text-accent-sky transition hover:bg-accent-sky/18"
           >

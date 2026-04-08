@@ -14,6 +14,7 @@ import { DemoEntryPage } from "../pages/demo-entry-page";
 import { IncidentsPage } from "../pages/incidents-page";
 import { LoginPage } from "../pages/login-page";
 import { LogsPage } from "../pages/logs-page";
+import { ExpeditionPage } from "../pages/expedition-page";
 import { ModulesPage } from "../pages/modules-page";
 import { ResearchPage } from "../pages/research-page";
 import { RunSummaryPage } from "../pages/run-summary-page";
@@ -102,6 +103,7 @@ function AuthenticatedRoutes({ authSession }: { authSession: AuthMe }) {
       >
         <Routes>
           <Route path="/dashboard" element={<DashboardPage station={stationQuery.data} />} />
+          <Route path="/expedition" element={<ExpeditionPage station={stationQuery.data} />} />
           <Route path="/modules" element={<ModulesPage station={stationQuery.data} />} />
           <Route path="/research" element={<ResearchPage station={stationQuery.data} />} />
           <Route path="/incidents" element={<IncidentsPage station={stationQuery.data} />} />

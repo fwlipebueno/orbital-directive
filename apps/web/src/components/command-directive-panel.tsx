@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { StationState } from "@orbital/shared";
 import { Flame, ShieldPlus, SlidersHorizontal, Zap } from "lucide-react";
+import { useAudio } from "../features/audio/audio-provider";
 import { useI18n } from "../i18n/i18n-provider";
 import { formatNumber } from "../lib/format";
 
@@ -25,15 +26,18 @@ const thermalPolicyKeys: StationState["commandState"]["thermalPolicy"][] = ["nom
 function OptionChip({
   active,
   label,
-  onClick
+  onClick,
+  onHover
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
+  onHover: () => void;
 }) {
   return (
     <button
       type="button"
+      onMouseEnter={onHover}
       onClick={onClick}
       className={cn(
         "rounded-full border px-3 py-2 text-xs transition",
@@ -61,6 +65,7 @@ export function CommandDirectivePanel({
   isReservePending
 }: CommandDirectivePanelProps) {
   const { t } = useI18n();
+  const audio = useAudio();
   const [powerProfile, setPowerProfile] = useState(state.powerProfile);
   const [subsystemFocus, setSubsystemFocus] = useState(state.subsystemFocus);
   const [thermalPolicy, setThermalPolicy] = useState(state.thermalPolicy);
@@ -94,7 +99,11 @@ export function CommandDirectivePanel({
                 key={key}
                 active={powerProfile === key}
                 label={t(`command.powerProfile.${key}`)}
-                onClick={() => setPowerProfile(key)}
+                onHover={() => audio.playEffect("hover")}
+                onClick={() => {
+                  audio.playEffect("click");
+                  setPowerProfile(key);
+                }}
               />
             ))}
           </div>
@@ -108,7 +117,11 @@ export function CommandDirectivePanel({
                 key={key}
                 active={subsystemFocus === key}
                 label={t(`command.subsystemFocus.${key}`)}
-                onClick={() => setSubsystemFocus(key)}
+                onHover={() => audio.playEffect("hover")}
+                onClick={() => {
+                  audio.playEffect("click");
+                  setSubsystemFocus(key);
+                }}
               />
             ))}
           </div>
@@ -122,7 +135,11 @@ export function CommandDirectivePanel({
                 key={key}
                 active={thermalPolicy === key}
                 label={t(`command.thermalPolicy.${key}`)}
-                onClick={() => setThermalPolicy(key)}
+                onHover={() => audio.playEffect("hover")}
+                onClick={() => {
+                  audio.playEffect("click");
+                  setThermalPolicy(key);
+                }}
               />
             ))}
           </div>
@@ -133,7 +150,9 @@ export function CommandDirectivePanel({
         <button
           type="button"
           disabled={!changed || isUpdating}
+          onMouseEnter={() => audio.playEffect("hover")}
           onClick={() => {
+            audio.playEffect("tactical");
             void onUpdateState({ powerProfile, subsystemFocus, thermalPolicy });
           }}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-sky/55 bg-accent-sky/12 px-3 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/18 disabled:opacity-45"
@@ -145,7 +164,9 @@ export function CommandDirectivePanel({
         <button
           type="button"
           disabled={!state.orbitalBurn.ready || isBurning}
+          onMouseEnter={() => audio.playEffect("hover")}
           onClick={() => {
+            audio.playEffect("tactical");
             void onOrbitalBurn();
           }}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-amber/55 bg-accent-amber/12 px-3 py-2 text-sm font-medium text-accent-amber transition hover:bg-accent-amber/18 disabled:opacity-45"
@@ -157,7 +178,9 @@ export function CommandDirectivePanel({
         <button
           type="button"
           disabled={!state.emergencyReserve.ready || isReservePending}
+          onMouseEnter={() => audio.playEffect("hover")}
           onClick={() => {
+            audio.playEffect("tactical");
             void onDeployReserve();
           }}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-teal/55 bg-accent-teal/12 px-3 py-2 text-sm font-medium text-accent-teal transition hover:bg-accent-teal/18 disabled:opacity-45"

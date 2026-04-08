@@ -3,6 +3,7 @@
 export type SceneId =
   | "entry"
   | "dashboard"
+  | "expedition"
   | "modules"
   | "research"
   | "incidents"
@@ -56,6 +57,22 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
       sourceUrl: "https://commons.wikimedia.org/wiki/File:ISS066-E-94036_-_View_of_Earth.jpg",
       author: "NASA / JSC Earth Science and Remote Sensing Unit",
       license: "Public domain (NASA)"
+    }
+  },
+  expedition: {
+    id: "expedition",
+    title: "Deep Field Traverse",
+    subtitle: "Exploration mission lane",
+    imageUrl:
+      "https://upload.wikimedia.org/wikipedia/commons/8/80/ESO_-_Milky_Way.jpg",
+    focal: "center 50%",
+    overlay:
+      "linear-gradient(180deg, rgba(2,7,14,0.2), rgba(2,7,14,0.82)), radial-gradient(circle at 54% 74%, rgba(112,188,255,0.34), transparent 54%), radial-gradient(circle at 24% 16%, rgba(255,214,163,0.14), transparent 42%)",
+    credit: {
+      label: "ESO Milky Way",
+      sourceUrl: "https://commons.wikimedia.org/wiki/File:ESO_-_Milky_Way.jpg",
+      author: "ESO / S. Brunier",
+      license: "CC BY 4.0"
     }
   },
   modules: {
@@ -156,6 +173,9 @@ export function resolveSceneId(pathname: string): SceneId {
   }
   if (pathname.startsWith("/modules")) {
     return "modules";
+  }
+  if (pathname.startsWith("/expedition")) {
+    return "expedition";
   }
   if (pathname.startsWith("/research")) {
     return "research";

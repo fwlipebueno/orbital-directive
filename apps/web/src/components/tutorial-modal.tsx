@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useAudio } from "../features/audio/audio-provider";
 import { useI18n } from "../i18n/i18n-provider";
 
 interface TutorialModalProps {
@@ -9,6 +10,7 @@ interface TutorialModalProps {
 
 export function TutorialModal({ open, onClose }: TutorialModalProps) {
   const { t } = useI18n();
+  const audio = useAudio();
   const [index, setIndex] = useState(0);
 
   const steps = useMemo(
@@ -60,7 +62,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              audio.playEffect("click");
+              onClose();
+            }}
             className="rounded-lg border border-white/20 p-2 text-ink-soft transition hover:text-ink-strong"
             aria-label={t("tutorial.close")}
           >
@@ -86,7 +91,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         <footer className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => setIndex((current) => Math.max(0, current - 1))}
+            onClick={() => {
+              audio.playEffect("tutorial");
+              setIndex((current) => Math.max(0, current - 1));
+            }}
             disabled={isFirst}
             className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-sm text-ink-normal transition hover:bg-white/10 disabled:opacity-40"
           >
@@ -97,7 +105,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           {isLast ? (
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                audio.playEffect("confirm");
+                onClose();
+              }}
               className="rounded-xl border border-accent-teal/60 bg-accent-teal/10 px-4 py-2 text-sm font-medium text-accent-teal transition hover:bg-accent-teal/18"
             >
               {t("tutorial.finish")}
@@ -105,7 +116,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
           ) : (
             <button
               type="button"
-              onClick={() => setIndex((current) => Math.min(steps.length - 1, current + 1))}
+              onClick={() => {
+                audio.playEffect("tutorial");
+                setIndex((current) => Math.min(steps.length - 1, current + 1));
+              }}
               className="inline-flex items-center gap-2 rounded-xl border border-accent-sky/60 bg-accent-sky/10 px-4 py-2 text-sm font-medium text-accent-sky transition hover:bg-accent-sky/18"
             >
               {t("tutorial.next")}

@@ -5,6 +5,8 @@ import { useDemoMutation, useLoginMutation, useRegisterMutation } from "../hooks
 import { useI18n } from "../i18n/i18n-provider";
 import { getErrorMessage } from "../lib/errors";
 
+const introRequestedSessionKey = "orbital-directive-cinematic-intro-requested";
+
 export function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
@@ -25,6 +27,7 @@ export function LoginPage() {
     setErrorMessage(null);
 
     try {
+      sessionStorage.setItem(introRequestedSessionKey, "true");
       if (mode === "login") {
         await loginMutation.mutateAsync({ email, password });
       } else {
@@ -38,6 +41,7 @@ export function LoginPage() {
   async function runDemo() {
     setErrorMessage(null);
     try {
+      sessionStorage.setItem(introRequestedSessionKey, "true");
       await demoMutation.mutateAsync();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));

@@ -11,19 +11,21 @@ import {
   NotebookText,
   PanelLeftClose,
   PanelLeftOpen,
+  Rocket,
   Settings,
   SlidersHorizontal,
   Sparkles,
   Wrench
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useUiPreferences } from "../app/ui-context";
-import { useAudio } from "../features/audio/audio-provider";
+import { useAudio, type AmbienceProfile } from "../features/audio/audio-provider";
 import { useI18n } from "../i18n/i18n-provider";
 import { cn } from "../lib/cn";
 import { formatRelativeDate } from "../lib/format";
-import { getSceneDefinition, resolveSceneId } from "../lib/space-scenes";
+import { getSceneDefinition, resolveSceneId, type SceneId } from "../lib/space-scenes";
+import { MissionIntroSequence } from "./mission-intro-sequence";
 import { SeverityBadge } from "./severity-badge";
 import { SpaceSceneBackdrop } from "./space-scene-backdrop";
 import { TutorialModal } from "./tutorial-modal";
@@ -36,6 +38,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { to: "/dashboard", labelKey: "shell.nav.dashboard", icon: Gauge },
+  { to: "/expedition", labelKey: "shell.nav.expedition", icon: Rocket },
   { to: "/modules", labelKey: "shell.nav.modules", icon: Wrench },
   { to: "/research", labelKey: "shell.nav.research", icon: Sparkles },
   { to: "/incidents", labelKey: "shell.nav.incidents", icon: AlertTriangle },
@@ -45,7 +48,8 @@ const navItems: NavItem[] = [
 ];
 
 const tutorialSeenKey = "orbital-directive-tutorial-seen";
-const storySeenKey = "orbital-directive-story-seen";
+const introPlayedSessionKey = "orbital-directive-cinematic-intro-played";
+const introRequestedSessionKey = "orbital-directive-cinematic-intro-requested";
 
 interface AppShellProps {
   station: StationState;
@@ -65,8 +69,19 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
   const [hudOpen, setHudOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [routeTransitioning, setRouteTransitioning] = useState(false);
-  const [showStoryIntro, setShowStoryIntro] = useState(false);
+  const [routeContentHidden, setRouteContentHidden] = useState(false);
+  const [transitionLabel, setTransitionLabel] = useState<{ from: SceneId; to: SceneId } | null>(null);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [introExiting, setIntroExiting] = useState(false);
+  const [introShellReveal, setIntroShellReveal] = useState(false);
+  const [introPhase, setIntroPhase] = useState(0);
+  const [introProgress, setIntroProgress] = useState(0);
+  const [introTick, setIntroTick] = useState(0);
 
+  const initialPathRef = useRef(location.pathname);
+  const previousSceneRef = useRef<SceneId>(sceneId);
+  const previousPhaseRef = useRef(0);
+  const introExitTimeoutRef = useRef<number | null>(null);
   const sceneContext = useMemo(() => t(`scene.context.${sceneId}`), [sceneId, t]);
 
   const audioActionLabel = audio.isAudioEnabled
@@ -74,6 +89,26 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
       ? t("common.audioArmed")
       : t("common.audioPending")
     : t("common.enableAudio");
+
+  const clearIntroExitTimeout = useCallback(() => {
+    if (introExitTimeoutRef.current) {
+      window.clearTimeout(introExitTimeoutRef.current);
+      introExitTimeoutRef.current = null;
+    }
+  }, []);
+
+  const beginIntroHandoff = useCallback(
+    (durationMs: number) => {
+      setIntroShellReveal(true);
+      setIntroExiting(true);
+      clearIntroExitTimeout();
+      introExitTimeoutRef.current = window.setTimeout(() => {
+        setIntroOpen(false);
+        setIntroExiting(false);
+      }, durationMs);
+    },
+    [clearIntroExitTimeout]
+  );
 
   useEffect(() => {
     const hasSeenTutorial = localStorage.getItem(tutorialSeenKey) === "true";
@@ -84,38 +119,158 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
   }, []);
 
   useEffect(() => {
+    const severity = station.runSummary.severity;
+    const nextProfile: AmbienceProfile = (() => {
+      if (severity === "crisis") {
+        if (sceneId === "debrief" || sceneId === "logs") {
+          return "risk";
+        }
+        return "emergency";
+      }
+
+      if (sceneId === "expedition") {
+        return severity === "alert" || severity === "attention" ? "action" : "command";
+      }
+
+      if (sceneId === "incidents") {
+        return "risk";
+      }
+      if (sceneId === "modules") {
+        return "engineering";
+      }
+      if (sceneId === "research") {
+        return "research";
+      }
+      if (sceneId === "logs" || sceneId === "debrief") {
+        return "debrief";
+      }
+      if (sceneId === "dashboard") {
+        if (severity === "alert" || severity === "attention") {
+          return "risk";
+        }
+        return "command";
+      }
+      if (severity === "alert" || severity === "attention") {
+        return "risk";
+      }
+      return "calm";
+    })();
+    audio.setAmbienceProfile(nextProfile);
+  }, [audio, sceneId, station.runSummary.severity]);
+
+  useLayoutEffect(() => {
     if (reducedSensoryMode) {
       setRouteTransitioning(false);
+      setRouteContentHidden(false);
+      setTransitionLabel(null);
+      previousSceneRef.current = sceneId;
+      return;
+    }
+
+    const isInitialRender = initialPathRef.current === location.pathname;
+    if (isInitialRender) {
+      initialPathRef.current = "";
+      previousSceneRef.current = sceneId;
       return;
     }
 
     setRouteTransitioning(true);
-    const timeoutId = window.setTimeout(() => setRouteTransitioning(false), 720);
-    return () => window.clearTimeout(timeoutId);
-  }, [location.pathname, reducedSensoryMode]);
+    setRouteContentHidden(true);
+    setTransitionLabel({ from: previousSceneRef.current, to: sceneId });
+    audio.playEffect("transition");
+    const holdTimeout = window.setTimeout(() => {
+      setRouteContentHidden(false);
+    }, 520);
+    const timeoutId = window.setTimeout(() => {
+      setRouteTransitioning(false);
+      setTransitionLabel(null);
+    }, 1080);
+    previousSceneRef.current = sceneId;
+    return () => {
+      window.clearTimeout(holdTimeout);
+      window.clearTimeout(timeoutId);
+    };
+  }, [audio, location.pathname, reducedSensoryMode, sceneId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (reducedSensoryMode || !location.pathname.startsWith("/dashboard")) {
       return;
     }
 
-    const hasSeenStoryIntro = localStorage.getItem(storySeenKey) === "true";
-    if (hasSeenStoryIntro) {
+    const introRequested = sessionStorage.getItem(introRequestedSessionKey) === "true";
+    const introPlayed = sessionStorage.getItem(introPlayedSessionKey) === "true";
+    if (!introRequested && introPlayed) {
       return;
     }
 
-    setShowStoryIntro(true);
-    localStorage.setItem(storySeenKey, "true");
-
-    const timeoutId = window.setTimeout(() => setShowStoryIntro(false), 2200);
-    return () => window.clearTimeout(timeoutId);
+    setIntroOpen(true);
+    setIntroExiting(false);
+    setIntroShellReveal(false);
+    setIntroPhase(0);
+    setIntroProgress(0);
+    setIntroTick(Date.now());
+    previousPhaseRef.current = 0;
+    sessionStorage.setItem(introPlayedSessionKey, "true");
+    sessionStorage.removeItem(introRequestedSessionKey);
   }, [location.pathname, reducedSensoryMode]);
+
+  useEffect(() => {
+    if (!introOpen || introExiting) {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const totalMs = 8200;
+    const tick = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const clamped = Math.max(0, Math.min(1, elapsed / totalMs));
+      const phase = Math.min(3, Math.floor((elapsed / totalMs) * 4));
+      setIntroProgress(clamped);
+      setIntroPhase(phase);
+
+      if (phase !== previousPhaseRef.current) {
+        previousPhaseRef.current = phase;
+        if (phase === 1 || phase === 2) {
+          audio.playEffect("transition");
+        }
+        if (phase === 3) {
+          audio.playEffect("confirm");
+        }
+      }
+
+      if (clamped >= 0.82) {
+        setIntroShellReveal(true);
+      }
+
+      if (elapsed >= totalMs) {
+        window.clearInterval(tick);
+        setIntroProgress(1);
+        setIntroPhase(3);
+        beginIntroHandoff(760);
+      }
+    }, 88);
+
+    audio.playEffect("intro");
+    return () => window.clearInterval(tick);
+  }, [audio, beginIntroHandoff, introExiting, introOpen, introTick]);
+
+  useEffect(() => {
+    return () => {
+      clearIntroExitTimeout();
+    };
+  }, [clearIntroExitTimeout]);
 
   return (
     <div className="command-grid relative min-h-screen bg-bg-deep text-ink-strong">
       <SpaceSceneBackdrop sceneId={sceneId} severity={station.runSummary.severity} />
 
-      <div className="orbital-shell">
+      <div
+        className={cn(
+          "orbital-shell",
+          introOpen && !introShellReveal && "intro-shell-hidden",
+          introOpen && introShellReveal && "intro-shell-revealing"
+        )}
+      >
         <div className="orbital-layout" data-nav-collapsed={navCollapsed ? "true" : "false"}>
           <aside className={cn("tactical-dock glass-panel lg:sticky lg:top-3 lg:h-[calc(100vh-1.5rem)]", navCollapsed ? "px-2" : "")}>
             <header className={cn("mb-5 border-b border-white/15 pb-4", navCollapsed ? "px-1" : "")}>
@@ -160,6 +315,7 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
                     key={item.to}
                     to={item.to}
                     onMouseEnter={() => audio.playEffect("hover")}
+                    onClick={() => audio.playEffect("click")}
                     className={({ isActive }) =>
                       cn(
                         "nav-chip group flex items-center gap-2.5 px-3 py-2 text-sm",
@@ -239,8 +395,21 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
             </header>
 
             <div className="route-stage">
-              {routeTransitioning ? <div className="route-cinematic-overlay" /> : null}
-              <main className="grid gap-4 pb-3">{children}</main>
+              {routeTransitioning ? (
+                <div className="route-cinematic-overlay">
+                  {transitionLabel ? (
+                    <div className="sector-transition-label">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink-soft">{t("transition.eyebrow")}</p>
+                      <p className="mt-1 font-display text-lg text-ink-strong">
+                        {t(`transition.scene.${transitionLabel.from}`)} {t("transition.to")} {t(`transition.scene.${transitionLabel.to}`)}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <main key={location.pathname} className={cn("grid gap-4 pb-3", routeContentHidden && "route-content-hold")}>
+                {children}
+              </main>
             </div>
           </section>
         </div>
@@ -249,7 +418,9 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
       <aside
         className={cn(
           "hud-drawer fixed bottom-4 right-4 z-30 w-[min(94vw,340px)] rounded-[24px] border border-white/20 bg-[linear-gradient(180deg,rgba(7,15,27,0.95),rgba(4,9,17,0.97))] p-4 shadow-[0_26px_70px_rgba(2,6,14,0.75)] backdrop-blur-xl transition-all duration-300",
-          hudOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
+          hudOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
+          introOpen && !introShellReveal && "intro-ui-hidden",
+          introOpen && introShellReveal && "intro-ui-revealing"
         )}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -270,7 +441,7 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
           <button
             type="button"
             onClick={() => {
-              audio.playEffect("click");
+              audio.playEffect("tutorial");
               setTutorialOpen(true);
             }}
             className="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-black/25 px-3 py-2 text-sm text-ink-normal transition hover:bg-white/10"
@@ -313,7 +484,7 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
               const nextEnabled = !audio.isAudioEnabled;
               await audio.setAudioEnabled(nextEnabled);
               if (nextEnabled) {
-                audio.playEffect("unlock");
+                audio.playEffect("intro");
               }
             }}
             className="flex w-full items-center justify-center gap-2 rounded-full border border-ink-soft/30 px-3 py-2 text-sm text-ink-normal transition hover:border-accent-sky/50 hover:text-ink-strong"
@@ -327,27 +498,32 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
       <button
         type="button"
         onClick={() => {
-          audio.playEffect("click");
+          audio.playEffect("tutorial");
           setTutorialOpen(true);
         }}
         className={cn(
           "fixed bottom-4 z-30 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/45 px-3 py-2 text-xs text-ink-normal shadow-[0_18px_44px_rgba(2,6,14,0.55)] backdrop-blur-md transition hover:border-accent-sky/45 hover:text-ink-strong",
-          hudOpen ? "right-[356px] max-md:right-4" : "right-4"
+          hudOpen ? "right-[356px] max-md:right-4" : "right-4",
+          introOpen && !introShellReveal && "intro-ui-hidden",
+          introOpen && introShellReveal && "intro-ui-revealing"
         )}
       >
         <HelpCircle className="h-4 w-4" />
         {t("tutorial.button")}
       </button>
 
-      {showStoryIntro ? (
-        <div className="story-intro">
-          <article className="story-intro-panel">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-ink-soft">{t("shell.story.eyebrow")}</p>
-            <h3 className="mt-2 font-display text-2xl text-ink-strong">{t("shell.story.title")}</h3>
-            <p className="mt-2 text-sm text-ink-normal">{t("shell.story.body")}</p>
-          </article>
-        </div>
-      ) : null}
+      <MissionIntroSequence
+        open={introOpen}
+        exiting={introExiting}
+        phase={introPhase}
+        progress={introProgress}
+        onSkip={() => {
+          audio.playEffect("click");
+          setIntroProgress(1);
+          setIntroPhase(3);
+          beginIntroHandoff(420);
+        }}
+      />
 
       <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
     </div>

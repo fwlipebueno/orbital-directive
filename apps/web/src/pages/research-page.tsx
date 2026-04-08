@@ -67,7 +67,8 @@ export function ResearchPage({ station }: { station: StationState }) {
                         upgradeKey: entry.key,
                         idempotencyKey: newIdempotencyKey()
                       });
-                      audio.playEffect("success");
+                      audio.playEffect("tactical");
+                      window.setTimeout(() => audio.playEffect("confirm"), 120);
                     } catch {
                       audio.playEffect("error");
                     }

@@ -60,6 +60,19 @@ function barTone(percent: number): string {
   return "from-accent-teal/85 to-accent-teal/40";
 }
 
+function statusKey(percent: number): "resource.status.critical" | "resource.status.warning" | "resource.status.watch" | "resource.status.stable" {
+  if (percent < 25) {
+    return "resource.status.critical";
+  }
+  if (percent < 50) {
+    return "resource.status.warning";
+  }
+  if (percent < 70) {
+    return "resource.status.watch";
+  }
+  return "resource.status.stable";
+}
+
 export function ResourceStrip({ resources: snapshot }: { resources: StationState["resources"] }) {
   const { t } = useI18n();
 
@@ -79,10 +92,13 @@ export function ResourceStrip({ resources: snapshot }: { resources: StationState
               <p className={cn("mt-1 font-mono text-lg", tone(percent))}>
                 {resource === "credits" || resource === "research" ? formatNumber(rawValue, 0) : formatNumber(rawValue, 1)}
               </p>
+              <p className={cn("mt-0.5 text-[11px] uppercase tracking-[0.12em]", tone(percent))}>
+                {t(statusKey(percent))} | {formatNumber(percent, 0)}%
+              </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
                 <div
                   className={cn("h-full rounded-full bg-gradient-to-r", barTone(percent))}
-                  style={{ width: `${Math.max(4, percent)}%` }}
+                  style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
                 />
               </div>
             </article>
@@ -92,3 +108,4 @@ export function ResourceStrip({ resources: snapshot }: { resources: StationState
     </section>
   );
 }
+

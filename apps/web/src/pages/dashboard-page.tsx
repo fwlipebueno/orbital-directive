@@ -1,10 +1,13 @@
 import type { StationState } from "@orbital/shared";
 import { AlertTriangle, ArrowUpCircle, CheckCircle2, Radar, ShieldAlert, Target } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useUiPreferences } from "../app/ui-context";
 import { CommandDirectivePanel } from "../components/command-directive-panel";
 import { EarthViewport } from "../components/earth-viewport";
 import { ResourceStrip } from "../components/resource-strip";
 import { useAudio } from "../features/audio/audio-provider";
+import { type ExpeditionHint, useExpeditionReport } from "../features/expedition/expedition-store";
 import {
   useCommandStateMutation,
   useEmergencyReserveMutation,
@@ -12,6 +15,7 @@ import {
   useRefreshStation
 } from "../hooks/use-station";
 import { useI18n } from "../i18n/i18n-provider";
+import { cn } from "../lib/cn";
 import { getErrorMessage } from "../lib/errors";
 import { formatNumber, formatRelativeDate } from "../lib/format";
 import { incidentLabel } from "../lib/game-labels";
@@ -37,25 +41,118 @@ function riskLabel(score: number, t: (key: string) => string): string {
   return t("dashboard.risk.low");
 }
 
+type MissionPreset = {
+  powerProfile: StationState["commandState"]["powerProfile"];
+  subsystemFocus: StationState["commandState"]["subsystemFocus"];
+  thermalPolicy: StationState["commandState"]["thermalPolicy"];
+};
+
+const expeditionHintPreset: Record<ExpeditionHint, MissionPreset> = {
+  command: { powerProfile: "balanced", subsystemFocus: "morale", thermalPolicy: "nominal" },
+  engineering: { powerProfile: "lifeSupport", subsystemFocus: "integrity", thermalPolicy: "economy" },
+  research: { powerProfile: "research", subsystemFocus: "research", thermalPolicy: "boost" },
+  risk: { powerProfile: "shielded", subsystemFocus: "integrity", thermalPolicy: "nominal" }
+};
+
 export function DashboardPage({ station }: { station: StationState }) {
   const { t, locale } = useI18n();
   const { minimalNarrativeMode } = useUiPreferences();
   const refreshStation = useRefreshStation();
   const audio = useAudio();
+  const { report: expeditionReport } = useExpeditionReport();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const commandMutation = useCommandStateMutation();
   const orbitalBurnMutation = useOrbitalBurnMutation();
   const reserveMutation = useEmergencyReserveMutation();
 
+  const [actionPulse, setActionPulse] = useState<"" | "directive" | "burn" | "reserve">("");
   const openIncidents = station.incidents.filter((incident) => incident.status === "open");
   const damagedModules = station.modules.filter((module) => module.health < 70);
   const hullIntegrity = station.resources.hullIntegrity ?? 0;
   const tacticalRisk = riskMeter(station);
   const commandError = commandMutation.error ?? orbitalBurnMutation.error ?? reserveMutation.error;
+  const expeditionHintParam = searchParams.get("expeditionHint");
+  const expeditionHint = expeditionHintParam as ExpeditionHint | null;
+  const coreResourcesSafe =
+    (station.resources.energy ?? 0) >= 35 &&
+    (station.resources.oxygen ?? 0) >= 35 &&
+    (station.resources.water ?? 0) >= 35 &&
+    (station.resources.food ?? 0) >= 35;
+  const objectives = [
+    coreResourcesSafe,
+    hullIntegrity >= 62,
+    openIncidents.length === 0,
+    station.missionTelemetry.thermalLoad <= 68
+  ];
+  const objectiveDone = objectives.filter(Boolean).length;
+  const objectiveProgress = Math.round((objectiveDone / objectives.length) * 100);
+  const nextActionKey =
+    openIncidents.length > 0
+      ? "incidents"
+      : hullIntegrity < 62 || damagedModules.length > 2
+        ? "hull"
+        : station.missionTelemetry.thermalLoad > 72
+          ? "thermal"
+          : !coreResourcesSafe
+            ? "resources"
+            : "research";
+
+  const missionPresets: Array<{ id: string; labelKey: string; preset: MissionPreset }> = [
+    {
+      id: "stabilize",
+      labelKey: "dashboard.preset.stabilize",
+      preset: { powerProfile: "lifeSupport", subsystemFocus: "integrity", thermalPolicy: "economy" }
+    },
+    {
+      id: "research",
+      labelKey: "dashboard.preset.research",
+      preset: { powerProfile: "research", subsystemFocus: "research", thermalPolicy: "boost" }
+    },
+    {
+      id: "containment",
+      labelKey: "dashboard.preset.containment",
+      preset: { powerProfile: "shielded", subsystemFocus: "integrity", thermalPolicy: "nominal" }
+    }
+  ];
+  const activeExpeditionHint: ExpeditionHint | null =
+    expeditionHint === "command" || expeditionHint === "engineering" || expeditionHint === "research" || expeditionHint === "risk"
+      ? expeditionHint
+      : expeditionReport?.hint ?? null;
+
+  async function applyPreset(preset: MissionPreset, pulse: "directive" | "burn" | "reserve" = "directive") {
+    try {
+      await commandMutation.mutateAsync({
+        stationId: station.stationId,
+        powerProfile: preset.powerProfile,
+        subsystemFocus: preset.subsystemFocus,
+        thermalPolicy: preset.thermalPolicy
+      });
+      audio.playEffect("tactical");
+      window.setTimeout(() => audio.playEffect("confirm"), 120);
+      setActionPulse(pulse);
+      await refreshStation();
+    } catch {
+      audio.playEffect("error");
+    }
+  }
+
+  useEffect(() => {
+    if (!actionPulse) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setActionPulse(""), 1400);
+    return () => window.clearTimeout(timeoutId);
+  }, [actionPulse]);
 
   return (
     <section className="grid gap-4 pb-3">
       <article className="mission-theater grid gap-4 bg-[linear-gradient(180deg,rgba(8,17,30,0.66),rgba(5,11,21,0.92))] p-4 xl:grid-cols-[1.6fr_0.9fr]">
+        {actionPulse ? (
+          <div className="action-pulse-banner absolute right-5 top-5 z-10 rounded-full border border-accent-sky/40 bg-black/38 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-strong">
+            {t(`dashboard.actionPulse.${actionPulse}`)}
+          </div>
+        ) : null}
         <div className="grid gap-3">
           <EarthViewport station={station} className="min-h-[460px]" />
           <div className="rounded-2xl border border-white/16 bg-black/30 p-4">
@@ -73,7 +170,7 @@ export function DashboardPage({ station }: { station: StationState }) {
               <div className="rounded-xl border border-white/14 bg-black/25 px-3 py-2">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-ink-soft">{t("dashboard.risk.label")}</p>
                 <p className="mt-1 text-sm text-ink-strong">
-                  {riskLabel(tacticalRisk, t)} · {formatNumber(tacticalRisk, 0)}%
+                  {riskLabel(tacticalRisk, t)} | {formatNumber(tacticalRisk, 0)}%
                 </p>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
                   <div
@@ -85,7 +182,7 @@ export function DashboardPage({ station }: { station: StationState }) {
               <div className="rounded-xl border border-white/14 bg-black/25 px-3 py-2">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-ink-soft">{t("dashboard.decisionWindow")}</p>
                 <p className="mt-1 text-sm text-ink-strong">
-                  {t(`dashboard.telemetry.${station.missionTelemetry.deltaVWindow}`)} ·{" "}
+                  {t(`dashboard.telemetry.${station.missionTelemetry.deltaVWindow}`)} |{" "}
                   {t(`dashboard.telemetry.${station.missionTelemetry.operationalRisk}`)}
                 </p>
                 <p className="mt-1 text-xs text-ink-soft">{t("dashboard.decisionHint")}</p>
@@ -99,27 +196,19 @@ export function DashboardPage({ station }: { station: StationState }) {
           isUpdating={commandMutation.isPending}
           isBurning={orbitalBurnMutation.isPending}
           isReservePending={reserveMutation.isPending}
-          onUpdateState={async (next) => {
-            try {
-              await commandMutation.mutateAsync({
-                stationId: station.stationId,
-                powerProfile: next.powerProfile,
-                subsystemFocus: next.subsystemFocus,
-                thermalPolicy: next.thermalPolicy
-              });
-              audio.playEffect("success");
-              await refreshStation();
-            } catch {
-              audio.playEffect("error");
-            }
-          }}
+          onUpdateState={async (next) => applyPreset(next)}
           onOrbitalBurn={async () => {
             try {
               await orbitalBurnMutation.mutateAsync({
                 stationId: station.stationId,
                 idempotencyKey: newIdempotencyKey()
               });
-              audio.playEffect("unlock");
+              audio.playEffect("tactical");
+              window.setTimeout(
+                () => audio.playEffect(station.runSummary.severity === "crisis" ? "emergency" : "warning"),
+                130
+              );
+              setActionPulse("burn");
               await refreshStation();
             } catch {
               audio.playEffect("error");
@@ -131,7 +220,9 @@ export function DashboardPage({ station }: { station: StationState }) {
                 stationId: station.stationId,
                 idempotencyKey: newIdempotencyKey()
               });
-              audio.playEffect("success");
+              audio.playEffect("tactical");
+              window.setTimeout(() => audio.playEffect("confirm"), 130);
+              setActionPulse("reserve");
               await refreshStation();
             } catch {
               audio.playEffect("error");
@@ -140,7 +231,115 @@ export function DashboardPage({ station }: { station: StationState }) {
         />
       </article>
 
+      <article className="mission-loop-board grid gap-3">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.objective.eyebrow")}</p>
+            <h3 className="mt-1 font-display text-xl text-ink-strong">{t("dashboard.objective.title")}</h3>
+            <p className="mt-1 text-sm text-ink-normal">{t("dashboard.objective.body")}</p>
+          </div>
+          <p className="rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-sm text-ink-strong">
+            {t("dashboard.objective.progress")} {objectiveProgress}%
+          </p>
+        </header>
+
+        <div className="h-1.5 overflow-hidden rounded-full border border-white/14 bg-white/[0.06]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-accent-teal/80 via-accent-sky/82 to-accent-amber/78"
+            style={{ width: `${Math.max(0, Math.min(100, objectiveProgress))}%` }}
+          />
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-4">
+          {[
+            { key: "observe", done: true, current: nextActionKey === "resources" || nextActionKey === "thermal" },
+            { key: "stabilize", done: coreResourcesSafe && hullIntegrity >= 62, current: nextActionKey === "hull" },
+            { key: "respond", done: openIncidents.length === 0, current: nextActionKey === "incidents" },
+            { key: "debrief", done: objectiveProgress >= 90 && openIncidents.length === 0, current: nextActionKey === "research" }
+          ].map((step) => (
+            <div
+              key={step.key}
+              className={cn(
+                "mission-loop-step",
+                step.done && "mission-loop-step--done",
+                step.current && "mission-loop-step--current"
+              )}
+            >
+              <p className="text-[10px] uppercase tracking-[0.14em] text-ink-soft">{t(`dashboard.loop.${step.key}.title`)}</p>
+              <p className="mt-1 text-xs text-ink-normal">{t(`dashboard.loop.${step.key}.body`)}</p>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-sm text-accent-sky">
+          {t("dashboard.nextAction.title")} {t(`dashboard.nextAction.${nextActionKey}`)}
+        </p>
+      </article>
+
       <ResourceStrip resources={station.resources} />
+
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <article className="console-surface p-4">
+          <header className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-lg text-ink-strong">{t("dashboard.expeditionIntel.title")}</h3>
+            <Link
+              to="/expedition"
+              onMouseEnter={() => audio.playEffect("hover")}
+              onClick={() => audio.playEffect("click")}
+              className="rounded-full border border-accent-sky/52 bg-accent-sky/12 px-3 py-1.5 text-xs text-accent-sky transition hover:bg-accent-sky/18"
+            >
+              {t("shell.nav.expedition")}
+            </Link>
+          </header>
+
+          {activeExpeditionHint ? (
+            <div className="grid gap-3">
+              <p className="text-sm text-ink-normal">
+                {t("dashboard.expeditionIntel.hintLabel")} {t(`dashboard.expeditionIntel.hint.${activeExpeditionHint}`)}
+              </p>
+              <button
+                type="button"
+                disabled={commandMutation.isPending}
+                onClick={async () => {
+                  await applyPreset(expeditionHintPreset[activeExpeditionHint]);
+                  if (expeditionHint) {
+                    const nextParams = new URLSearchParams(searchParams);
+                    nextParams.delete("expeditionHint");
+                    setSearchParams(nextParams, { replace: true });
+                  }
+                }}
+                className="rounded-full border border-accent-teal/56 bg-accent-teal/12 px-3 py-2 text-sm text-accent-teal transition hover:bg-accent-teal/18 disabled:opacity-50"
+              >
+                {t("dashboard.expeditionIntel.apply")}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-soft">{t("dashboard.expeditionIntel.empty")}</p>
+          )}
+        </article>
+
+        <article className="console-surface p-4">
+          <header className="mb-3">
+            <h3 className="font-display text-lg text-ink-strong">{t("dashboard.preset.title")}</h3>
+          </header>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {missionPresets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={commandMutation.isPending}
+                onMouseEnter={() => audio.playEffect("hover")}
+                onClick={async () => {
+                  await applyPreset(preset.preset);
+                }}
+                className="rounded-xl border border-white/18 bg-black/22 px-3 py-2 text-sm text-ink-normal transition hover:border-accent-sky/52 hover:text-ink-strong disabled:opacity-50"
+              >
+                {t(preset.labelKey)}
+              </button>
+            ))}
+          </div>
+        </article>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.14fr_0.86fr]">
         <article className="console-surface p-5">

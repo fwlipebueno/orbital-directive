@@ -56,7 +56,8 @@ export function IncidentsPage({ station }: { station: StationState }) {
                           incidentId: incident.id,
                           idempotencyKey: newIdempotencyKey()
                         });
-                        audio.playEffect("incident");
+                        audio.playEffect("tactical");
+                        window.setTimeout(() => audio.playEffect("warning"), 120);
                       } catch {
                         audio.playEffect("error");
                       }

@@ -9,7 +9,30 @@ import {
   type PropsWithChildren
 } from "react";
 
-type EffectName = "hover" | "click" | "alert" | "success" | "error" | "unlock" | "incident";
+type EffectName =
+  | "hover"
+  | "click"
+  | "confirm"
+  | "warning"
+  | "tactical"
+  | "transition"
+  | "intro"
+  | "tutorial"
+  | "alert"
+  | "emergency"
+  | "success"
+  | "error"
+  | "unlock"
+  | "incident";
+export type AmbienceProfile =
+  | "calm"
+  | "command"
+  | "engineering"
+  | "research"
+  | "risk"
+  | "action"
+  | "debrief"
+  | "emergency";
 
 interface AudioSettings {
   enabled: boolean;
@@ -23,17 +46,16 @@ interface AudioContextValue {
   settings: AudioSettings;
   isAudioReady: boolean;
   isAudioEnabled: boolean;
+  ambienceProfile: AmbienceProfile;
   unlockAudio: () => Promise<void>;
   setAudioEnabled: (enabled: boolean) => Promise<void>;
   toggleAudioEnabled: () => Promise<void>;
+  setAmbienceProfile: (profile: AmbienceProfile) => void;
   playEffect: (effect: EffectName) => void;
   updateSettings: (next: Partial<AudioSettings>) => void;
 }
 
-type AmbientEngine = {
-  intervalId: number | null;
-  stop: () => void;
-};
+type AmbientEngine = { stop: () => void };
 
 const STORAGE_KEY = "orbital-directive-audio";
 
@@ -166,9 +188,161 @@ function playTone(
   };
 }
 
+function playNoiseSweep(
+  context: AudioContext,
+  output: AudioNode,
+  {
+    startAt,
+    duration,
+    gain,
+    filterStart,
+    filterEnd
+  }: {
+    startAt: number;
+    duration: number;
+    gain: number;
+    filterStart: number;
+    filterEnd: number;
+  }
+): void {
+  const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
+  const amp = context.createGain();
+
+  source.buffer = createNoiseBuffer(context, Math.max(0.18, duration + 0.12));
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(filterStart, startAt);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(40, filterEnd), startAt + duration);
+  filter.Q.value = 0.4;
+
+  amp.gain.setValueAtTime(0.0001, startAt);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), startAt + 0.012);
+  amp.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+  source.connect(filter);
+  filter.connect(amp);
+  amp.connect(output);
+
+  source.start(startAt);
+  source.stop(startAt + duration + 0.06);
+  source.onended = () => {
+    source.disconnect();
+    filter.disconnect();
+    amp.disconnect();
+  };
+}
+
+interface AmbienceProfileConfig {
+  root: number;
+  accent: number;
+  texture: number;
+  pulseMs: number;
+  pulseGain: number;
+  filterFrequency: number;
+  noiseFrequency: number;
+  lfoRate: number;
+}
+
+function getAmbienceConfig(profile: AmbienceProfile, reducedSensoryMode: boolean): AmbienceProfileConfig {
+  const scale = reducedSensoryMode ? 1.32 : 1;
+  const pulse = (ms: number) => Math.round(ms * scale);
+  switch (profile) {
+    case "command":
+      return {
+        root: 80,
+        accent: 121,
+        texture: 162,
+        pulseMs: pulse(9200),
+        pulseGain: 0.018,
+        filterFrequency: 1080,
+        noiseFrequency: 700,
+        lfoRate: reducedSensoryMode ? 0.024 : 0.044
+      };
+    case "engineering":
+      return {
+        root: 69,
+        accent: 104,
+        texture: 148,
+        pulseMs: pulse(7800),
+        pulseGain: 0.022,
+        filterFrequency: 980,
+        noiseFrequency: 560,
+        lfoRate: reducedSensoryMode ? 0.03 : 0.052
+      };
+    case "research":
+      return {
+        root: 96,
+        accent: 144,
+        texture: 214,
+        pulseMs: pulse(10200),
+        pulseGain: 0.017,
+        filterFrequency: 1320,
+        noiseFrequency: 760,
+        lfoRate: reducedSensoryMode ? 0.022 : 0.038
+      };
+    case "risk":
+      return {
+        root: 88,
+        accent: 133,
+        texture: 188,
+        pulseMs: pulse(8600),
+        pulseGain: 0.02,
+        filterFrequency: 1160,
+        noiseFrequency: 780,
+        lfoRate: reducedSensoryMode ? 0.032 : 0.056
+      };
+    case "action":
+      return {
+        root: 102,
+        accent: 156,
+        texture: 224,
+        pulseMs: pulse(6600),
+        pulseGain: 0.028,
+        filterFrequency: 1380,
+        noiseFrequency: 880,
+        lfoRate: reducedSensoryMode ? 0.036 : 0.072
+      };
+    case "debrief":
+      return {
+        root: 64,
+        accent: 96,
+        texture: 139,
+        pulseMs: pulse(12800),
+        pulseGain: 0.013,
+        filterFrequency: 820,
+        noiseFrequency: 480,
+        lfoRate: reducedSensoryMode ? 0.018 : 0.03
+      };
+    case "emergency":
+      return {
+        root: 114,
+        accent: 172,
+        texture: 246,
+        pulseMs: pulse(5200),
+        pulseGain: 0.034,
+        filterFrequency: 1520,
+        noiseFrequency: 980,
+        lfoRate: reducedSensoryMode ? 0.042 : 0.086
+      };
+    case "calm":
+    default:
+      return {
+        root: 72,
+        accent: 108,
+        texture: 152,
+        pulseMs: pulse(11800),
+        pulseGain: 0.014,
+        filterFrequency: 900,
+        noiseFrequency: 620,
+        lfoRate: reducedSensoryMode ? 0.02 : 0.036
+      };
+  }
+}
+
 export function AudioProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<AudioSettings>(readStoredSettings);
   const [isAudioReady, setIsAudioReady] = useState(false);
+  const [ambienceProfile, setAmbienceProfileState] = useState<AmbienceProfile>("calm");
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -177,6 +351,7 @@ export function AudioProvider({ children }: PropsWithChildren) {
   const convolverRef = useRef<ConvolverNode | null>(null);
   const reverbGainRef = useRef<GainNode | null>(null);
   const ambientRef = useRef<AmbientEngine | null>(null);
+  const lastEffectAtRef = useRef<Partial<Record<EffectName, number>>>({});
 
   const stopAmbient = useCallback(() => {
     const ambient = ambientRef.current;
@@ -266,6 +441,30 @@ export function AudioProvider({ children }: PropsWithChildren) {
     reverb.gain.setTargetAtTime(shouldSilence ? 0 : 0.18 * reducedFactor, context.currentTime, 0.3);
   }, [settings.enabled, settings.effectsVolume, settings.musicVolume, settings.muted, settings.reducedSensoryMode]);
 
+  const ensureAudioRuntime = useCallback(() => {
+    if (!settings.enabled || settings.muted) {
+      return false;
+    }
+    const graphReady = ensureGraph();
+    if (!graphReady) {
+      return false;
+    }
+
+    const context = audioContextRef.current;
+    if (!context) {
+      return false;
+    }
+
+    if (context.state === "suspended") {
+      void context.resume().catch(() => undefined);
+    }
+
+    if (!isAudioReady) {
+      setIsAudioReady(true);
+    }
+    return true;
+  }, [ensureGraph, isAudioReady, settings.enabled, settings.muted]);
+
   const startAmbient = useCallback(() => {
     const context = audioContextRef.current;
     const musicGain = musicGainRef.current;
@@ -289,29 +488,37 @@ export function AudioProvider({ children }: PropsWithChildren) {
 
     const now = context.currentTime;
     const reducedFactor = settings.reducedSensoryMode ? 0.65 : 1;
+    const profileConfig = getAmbienceConfig(ambienceProfile, settings.reducedSensoryMode);
+    const actionLike = ambienceProfile === "action" || ambienceProfile === "risk" || ambienceProfile === "emergency";
+    const engineeringLike = ambienceProfile === "engineering" || ambienceProfile === "command";
 
     voiceBus.gain.setValueAtTime(0.0001, now);
-    voiceBus.gain.exponentialRampToValueAtTime(0.34 * reducedFactor, now + 2.4);
+    voiceBus.gain.exponentialRampToValueAtTime((actionLike ? 0.4 : 0.34) * reducedFactor, now + 2.4);
 
     voiceFilter.type = "lowpass";
-    voiceFilter.frequency.setValueAtTime(settings.reducedSensoryMode ? 560 : 900, now);
-    voiceFilter.Q.value = 0.45;
+    voiceFilter.frequency.setValueAtTime(
+      settings.reducedSensoryMode ? profileConfig.filterFrequency * 0.66 : profileConfig.filterFrequency,
+      now
+    );
+    voiceFilter.Q.value = actionLike ? 0.58 : 0.42;
 
     droneA.type = "sine";
     droneB.type = "triangle";
     droneC.type = "sine";
 
-    droneA.frequency.setValueAtTime(74, now);
-    droneB.frequency.setValueAtTime(111, now);
-    droneC.frequency.setValueAtTime(148, now);
+    droneA.frequency.setValueAtTime(profileConfig.root, now);
+    droneB.frequency.setValueAtTime(profileConfig.accent, now);
+    droneC.frequency.setValueAtTime(profileConfig.texture, now);
+    droneB.detune.value = engineeringLike ? -7 : 0;
+    droneC.detune.value = ambienceProfile === "research" ? 8 : 3;
 
-    droneGainA.gain.value = 0.22 * reducedFactor;
-    droneGainB.gain.value = 0.08 * reducedFactor;
-    droneGainC.gain.value = 0.06 * reducedFactor;
+    droneGainA.gain.value = (actionLike ? 0.24 : 0.21) * reducedFactor;
+    droneGainB.gain.value = (engineeringLike ? 0.12 : 0.09) * reducedFactor;
+    droneGainC.gain.value = (ambienceProfile === "research" ? 0.08 : 0.06) * reducedFactor;
 
     lfo.type = "sine";
-    lfo.frequency.value = settings.reducedSensoryMode ? 0.026 : 0.045;
-    lfoGain.gain.value = settings.reducedSensoryMode ? 34 : 58;
+    lfo.frequency.value = profileConfig.lfoRate;
+    lfoGain.gain.value = settings.reducedSensoryMode ? 26 : actionLike ? 72 : 56;
 
     lfo.connect(lfoGain);
     lfoGain.connect(voiceFilter.frequency);
@@ -328,9 +535,12 @@ export function AudioProvider({ children }: PropsWithChildren) {
     noise.buffer = createNoiseBuffer(context, 2.6);
     noise.loop = true;
     noiseFilter.type = "bandpass";
-    noiseFilter.frequency.setValueAtTime(settings.reducedSensoryMode ? 420 : 640, now);
+    noiseFilter.frequency.setValueAtTime(
+      settings.reducedSensoryMode ? profileConfig.noiseFrequency * 0.72 : profileConfig.noiseFrequency,
+      now
+    );
     noiseFilter.Q.value = 0.3;
-    noiseGain.gain.value = settings.reducedSensoryMode ? 0.005 : 0.01;
+    noiseGain.gain.value = settings.reducedSensoryMode ? 0.004 : actionLike ? 0.013 : 0.009;
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(voiceBus);
@@ -343,30 +553,49 @@ export function AudioProvider({ children }: PropsWithChildren) {
 
     const playAmbientPulse = () => {
       const pulseStart = context.currentTime + 0.02;
-      const base = 196;
-      const interval = settings.reducedSensoryMode ? 1.498 : 1.333;
+      const base = profileConfig.root * 2.52;
+      const interval = settings.reducedSensoryMode ? 1.42 : ambienceProfile === "research" ? 1.62 : 1.48;
       playTone(context, musicGain, {
         startAt: pulseStart,
-        duration: settings.reducedSensoryMode ? 0.4 : 0.52,
+        duration: settings.reducedSensoryMode ? 0.36 : 0.44,
         type: "sine",
         frequency: base,
         endFrequency: base * 0.94,
-        gain: 0.012 * reducedFactor,
-        filterFrequency: 1400
+        gain: profileConfig.pulseGain * reducedFactor,
+        filterFrequency: actionLike ? 1780 : 1520
       });
       playTone(context, musicGain, {
-        startAt: pulseStart + 0.18,
-        duration: settings.reducedSensoryMode ? 0.32 : 0.46,
+        startAt: pulseStart + 0.16,
+        duration: settings.reducedSensoryMode ? 0.3 : 0.42,
         type: "triangle",
         frequency: base * interval,
         endFrequency: base * interval * 0.95,
-        gain: 0.01 * reducedFactor,
-        filterFrequency: 1600
+        gain: profileConfig.pulseGain * 0.72 * reducedFactor,
+        filterFrequency: actionLike ? 1960 : 1660
       });
+      playNoiseSweep(context, musicGain, {
+        startAt: pulseStart + 0.03,
+        duration: settings.reducedSensoryMode ? 0.16 : 0.24,
+        gain: actionLike ? 0.0074 * reducedFactor : 0.0056 * reducedFactor,
+        filterStart: profileConfig.noiseFrequency * 1.2,
+        filterEnd: profileConfig.noiseFrequency * 0.72
+      });
+
+      if (ambienceProfile === "engineering" || ambienceProfile === "action" || ambienceProfile === "emergency") {
+        playTone(context, musicGain, {
+          startAt: pulseStart + 0.23,
+          duration: 0.16,
+          type: "sine",
+          frequency: base * 1.92,
+          endFrequency: base * 1.81,
+          gain: 0.0094 * reducedFactor,
+          filterFrequency: 1960
+        });
+      }
     };
 
-    const initialTimeout = window.setTimeout(playAmbientPulse, 2400);
-    const intervalId = window.setInterval(playAmbientPulse, settings.reducedSensoryMode ? 18000 : 12400);
+    const initialTimeout = window.setTimeout(playAmbientPulse, 2200);
+    const intervalId = window.setInterval(playAmbientPulse, profileConfig.pulseMs);
 
     const stop = () => {
       window.clearTimeout(initialTimeout);
@@ -405,11 +634,8 @@ export function AudioProvider({ children }: PropsWithChildren) {
       }, 760);
     };
 
-    ambientRef.current = {
-      intervalId,
-      stop
-    };
-  }, [settings.enabled, settings.muted, settings.reducedSensoryMode]);
+    ambientRef.current = { stop };
+  }, [ambienceProfile, settings.enabled, settings.muted, settings.reducedSensoryMode]);
 
   const unlockAudio = useCallback(async () => {
     const graphReady = ensureGraph();
@@ -464,11 +690,30 @@ export function AudioProvider({ children }: PropsWithChildren) {
     await setAudioEnabled(!settings.enabled);
   }, [setAudioEnabled, settings.enabled]);
 
+  const setAmbienceProfile = useCallback((profile: AmbienceProfile) => {
+    setAmbienceProfileState((previous) => (previous === profile ? previous : profile));
+  }, []);
+
   const playEffect = useCallback(
     (effect: EffectName) => {
+      const canPlay = ensureAudioRuntime();
+      if (!canPlay) {
+        return;
+      }
+
+      const nowMs = performance.now();
+      const lastAt = lastEffectAtRef.current[effect] ?? 0;
+      if (effect === "hover" && nowMs - lastAt < 48) {
+        return;
+      }
+      if (effect === "click" && nowMs - lastAt < 34) {
+        return;
+      }
+      lastEffectAtRef.current[effect] = nowMs;
+
       const context = audioContextRef.current;
       const effectsGain = effectsGainRef.current;
-      if (!context || !effectsGain || !settings.enabled || settings.muted) {
+      if (!context || !effectsGain || context.state === "closed") {
         return;
       }
 
@@ -479,12 +724,19 @@ export function AudioProvider({ children }: PropsWithChildren) {
         case "hover":
           playTone(context, effectsGain, {
             startAt: now,
-            duration: 0.08,
+            duration: 0.07,
             type: "sine",
-            frequency: 820,
-            endFrequency: 760,
-            gain: 0.028 * scale,
-            filterFrequency: 1900
+            frequency: 960,
+            endFrequency: 860,
+            gain: 0.016 * scale,
+            filterFrequency: 2300
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now,
+            duration: 0.06,
+            gain: 0.0038 * scale,
+            filterStart: 2500,
+            filterEnd: 1700
           });
           break;
         case "click":
@@ -492,48 +744,165 @@ export function AudioProvider({ children }: PropsWithChildren) {
             startAt: now,
             duration: 0.11,
             type: "triangle",
-            frequency: 460,
-            endFrequency: 396,
-            gain: 0.055 * scale,
-            filterFrequency: 1800
+            frequency: 380,
+            endFrequency: 330,
+            gain: 0.052 * scale,
+            filterFrequency: 1700
           });
           playTone(context, effectsGain, {
             startAt: now + 0.02,
-            duration: 0.08,
+            duration: 0.09,
             type: "sine",
-            frequency: 710,
-            endFrequency: 640,
-            gain: 0.025 * scale,
-            filterFrequency: 2100
+            frequency: 640,
+            endFrequency: 550,
+            gain: 0.024 * scale,
+            filterFrequency: 2200
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now,
+            duration: 0.09,
+            gain: 0.006 * scale,
+            filterStart: 2200,
+            filterEnd: 980
           });
           break;
+        case "confirm":
         case "success":
           playTone(context, effectsGain, {
             startAt: now,
-            duration: 0.13,
+            duration: 0.12,
             type: "sine",
             frequency: 380,
             endFrequency: 480,
-            gain: 0.058 * scale,
+            gain: 0.052 * scale,
             filterFrequency: 2100
           });
           playTone(context, effectsGain, {
             startAt: now + 0.12,
-            duration: 0.18,
+            duration: 0.2,
             type: "sine",
             frequency: 480,
-            endFrequency: 620,
-            gain: 0.052 * scale,
-            filterFrequency: 2300
+            endFrequency: 660,
+            gain: 0.046 * scale,
+            filterFrequency: 2400
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.01,
+            duration: 0.09,
+            gain: 0.0034 * scale,
+            filterStart: 1800,
+            filterEnd: 1200
           });
           break;
+        case "transition":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.16,
+            type: "triangle",
+            frequency: 280,
+            endFrequency: 460,
+            gain: 0.05 * scale,
+            filterFrequency: 1750
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.06,
+            duration: 0.24,
+            type: "sine",
+            frequency: 430,
+            endFrequency: 560,
+            gain: 0.038 * scale,
+            filterFrequency: 2150
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now,
+            duration: 0.22,
+            gain: 0.0084 * scale,
+            filterStart: 1560,
+            filterEnd: 520
+          });
+          break;
+        case "intro":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.24,
+            type: "triangle",
+            frequency: 196,
+            endFrequency: 264,
+            gain: 0.054 * scale,
+            filterFrequency: 1500
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.15,
+            duration: 0.44,
+            type: "sine",
+            frequency: 264,
+            endFrequency: 428,
+            gain: 0.046 * scale,
+            filterFrequency: 2300
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.03,
+            duration: 0.3,
+            gain: 0.006 * scale,
+            filterStart: 1700,
+            filterEnd: 680
+          });
+          break;
+        case "tutorial":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.08,
+            type: "sine",
+            frequency: 660,
+            endFrequency: 720,
+            gain: 0.028 * scale,
+            filterFrequency: 2400
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.085,
+            duration: 0.14,
+            type: "sine",
+            frequency: 720,
+            endFrequency: 810,
+            gain: 0.026 * scale,
+            filterFrequency: 2500
+          });
+          break;
+        case "tactical":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.16,
+            type: "triangle",
+            frequency: 228,
+            endFrequency: 308,
+            gain: 0.07 * scale,
+            filterFrequency: 1600
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.08,
+            duration: 0.22,
+            type: "sine",
+            frequency: 360,
+            endFrequency: 502,
+            gain: 0.052 * scale,
+            filterFrequency: 2220
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.015,
+            duration: 0.12,
+            gain: 0.0088 * scale,
+            filterStart: 1880,
+            filterEnd: 780
+          });
+          break;
+        case "warning":
         case "unlock":
           playTone(context, effectsGain, {
             startAt: now,
             duration: 0.12,
             type: "triangle",
-            frequency: 300,
-            endFrequency: 410,
+            frequency: 280,
+            endFrequency: 400,
             gain: 0.05 * scale,
             filterFrequency: 1900
           });
@@ -546,6 +915,13 @@ export function AudioProvider({ children }: PropsWithChildren) {
             gain: 0.06 * scale,
             filterFrequency: 2400
           });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.02,
+            duration: 0.11,
+            gain: 0.0065 * scale,
+            filterStart: 1900,
+            filterEnd: 980
+          });
           break;
         case "alert":
           playTone(context, effectsGain, {
@@ -557,6 +933,13 @@ export function AudioProvider({ children }: PropsWithChildren) {
             gain: 0.064 * scale,
             filterFrequency: 1280
           });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.01,
+            duration: 0.14,
+            gain: 0.0075 * scale,
+            filterStart: 1380,
+            filterEnd: 840
+          });
           playTone(context, effectsGain, {
             startAt: now + 0.2,
             duration: 0.16,
@@ -565,6 +948,42 @@ export function AudioProvider({ children }: PropsWithChildren) {
             endFrequency: 214,
             gain: 0.064 * scale,
             filterFrequency: 1280
+          });
+          break;
+        case "emergency":
+          playTone(context, effectsGain, {
+            startAt: now,
+            duration: 0.14,
+            type: "triangle",
+            frequency: 196,
+            endFrequency: 180,
+            gain: 0.084 * scale,
+            filterFrequency: 1160
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.16,
+            duration: 0.14,
+            type: "triangle",
+            frequency: 196,
+            endFrequency: 178,
+            gain: 0.084 * scale,
+            filterFrequency: 1160
+          });
+          playTone(context, effectsGain, {
+            startAt: now + 0.33,
+            duration: 0.26,
+            type: "sine",
+            frequency: 420,
+            endFrequency: 340,
+            gain: 0.054 * scale,
+            filterFrequency: 1480
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now,
+            duration: 0.36,
+            gain: 0.012 * scale,
+            filterStart: 1840,
+            filterEnd: 620
           });
           break;
         case "incident":
@@ -585,6 +1004,13 @@ export function AudioProvider({ children }: PropsWithChildren) {
             endFrequency: 402,
             gain: 0.048 * scale,
             filterFrequency: 1720
+          });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now + 0.03,
+            duration: 0.21,
+            gain: 0.009 * scale,
+            filterStart: 1680,
+            filterEnd: 720
           });
           break;
         case "error":
@@ -607,10 +1033,17 @@ export function AudioProvider({ children }: PropsWithChildren) {
             gain: 0.048 * scale,
             filterFrequency: 980
           });
+          playNoiseSweep(context, effectsGain, {
+            startAt: now,
+            duration: 0.18,
+            gain: 0.0084 * scale,
+            filterStart: 1280,
+            filterEnd: 440
+          });
           break;
       }
     },
-    [settings.enabled, settings.muted, settings.reducedSensoryMode]
+    [ensureAudioRuntime, settings.reducedSensoryMode]
   );
 
   const updateSettings = useCallback((next: Partial<AudioSettings>) => {
@@ -662,6 +1095,35 @@ export function AudioProvider({ children }: PropsWithChildren) {
   }, [isAudioReady, settings.enabled, unlockAudio]);
 
   useEffect(() => {
+    if (!settings.enabled || settings.muted) {
+      return;
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      const context = audioContextRef.current;
+      if (!context || context.state !== "suspended") {
+        return;
+      }
+      void context
+        .resume()
+        .then(() => {
+          refreshMix();
+          stopAmbient();
+          startAmbient();
+        })
+        .catch(() => undefined);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshMix, settings.enabled, settings.muted, startAmbient, stopAmbient]);
+
+  useEffect(() => {
     if (!isAudioReady) {
       return;
     }
@@ -671,8 +1133,17 @@ export function AudioProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    stopAmbient();
     startAmbient();
-  }, [isAudioReady, settings.enabled, settings.muted, settings.reducedSensoryMode, startAmbient, stopAmbient]);
+  }, [
+    ambienceProfile,
+    isAudioReady,
+    settings.enabled,
+    settings.muted,
+    settings.reducedSensoryMode,
+    startAmbient,
+    stopAmbient
+  ]);
 
   useEffect(() => {
     return () => {
@@ -688,13 +1159,25 @@ export function AudioProvider({ children }: PropsWithChildren) {
       settings,
       isAudioReady,
       isAudioEnabled: settings.enabled,
+      ambienceProfile,
       unlockAudio,
       setAudioEnabled,
       toggleAudioEnabled,
+      setAmbienceProfile,
       playEffect,
       updateSettings
     }),
-    [settings, isAudioReady, unlockAudio, setAudioEnabled, toggleAudioEnabled, playEffect, updateSettings]
+    [
+      ambienceProfile,
+      settings,
+      isAudioReady,
+      unlockAudio,
+      setAudioEnabled,
+      toggleAudioEnabled,
+      setAmbienceProfile,
+      playEffect,
+      updateSettings
+    ]
   );
 
   return <AudioControllerContext.Provider value={value}>{children}</AudioControllerContext.Provider>;

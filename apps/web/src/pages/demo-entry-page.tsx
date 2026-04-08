@@ -4,6 +4,8 @@ import { useDemoMutation } from "../hooks/use-auth";
 import { useI18n } from "../i18n/i18n-provider";
 import { getErrorMessage } from "../lib/errors";
 
+const introRequestedSessionKey = "orbital-directive-cinematic-intro-requested";
+
 export function DemoEntryPage() {
   const demoMutation = useDemoMutation();
   const { t } = useI18n();
@@ -22,6 +24,7 @@ export function DemoEntryPage() {
             type="button"
             disabled={demoMutation.isPending}
             onClick={async () => {
+              sessionStorage.setItem(introRequestedSessionKey, "true");
               await demoMutation.mutateAsync().catch(() => undefined);
             }}
             className="mt-6 rounded-full border border-accent-amber/60 bg-accent-amber/[0.08] px-4 py-2.5 text-sm text-accent-amber transition hover:bg-accent-amber/[0.14] disabled:opacity-60"
