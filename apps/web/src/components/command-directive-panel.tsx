@@ -139,14 +139,12 @@ export function CommandDirectivePanel({
         </article>
       ) : null}
 
-      <article className="command-context-line hud-frame hud-frame--corners rounded-xl border border-white/12 bg-black/18 px-3 py-2">
-        <p className="text-[11px] uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.currentPosture")}</p>
-        <p className="mt-1 text-sm text-ink-normal">{postureSummary}</p>
-      </article>
-
-      <article className="hud-frame hud-frame--corners rounded-xl border border-white/12 bg-black/20 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.quickTitle")}</p>
+      <article className="command-posture-deck hud-frame hud-frame--corners rounded-xl border border-white/12 bg-black/20 p-3">
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.currentPosture")}</p>
+            <p className="mt-1 text-sm text-ink-normal">{postureSummary}</p>
+          </div>
           <button
             type="button"
             onMouseEnter={() => audio.playEffect("hover")}
@@ -160,6 +158,8 @@ export function CommandDirectivePanel({
             <ChevronDown className={cn("h-3.5 w-3.5 transition", manualOpen && "rotate-180")} />
           </button>
         </div>
+
+        <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.quickTitle")}</p>
         <div className="grid gap-2 sm:grid-cols-3">
           {quickProfiles.map((profile) => (
             <button
@@ -186,7 +186,7 @@ export function CommandDirectivePanel({
       </article>
 
       {manualOpen ? (
-        <div className="command-track grid gap-2">
+        <div className="command-track hud-frame rounded-xl border border-white/12 bg-black/16 p-2 grid gap-2">
           <div className="command-track-row rounded-xl border border-white/12 bg-black/20 p-3">
             <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-ink-soft">{t("dashboard.command.powerProfile")}</p>
             <div className="grid gap-2 sm:grid-cols-2">

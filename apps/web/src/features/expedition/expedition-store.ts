@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type ExpeditionHint = "command" | "engineering" | "research" | "risk";
+export type ExpeditionFailureReason = "hullBreach" | "missionIncomplete";
 
 export interface ExpeditionReport {
   id: string;
@@ -11,6 +12,12 @@ export interface ExpeditionReport {
   score: number;
   outcome: "success" | "failure";
   hint: ExpeditionHint;
+  nearMisses?: number | undefined;
+  threatPeak?: number | undefined;
+  extracted?: boolean | undefined;
+  targetDistance?: number | undefined;
+  targetShards?: number | undefined;
+  failureReason?: ExpeditionFailureReason | undefined;
 }
 
 const storageKey = "orbital-directive-expedition-report";
@@ -39,7 +46,26 @@ export function readExpeditionReport(): ExpeditionReport | null {
     if (!["command", "engineering", "research", "risk"].includes(parsed.hint)) {
       return null;
     }
-    return parsed;
+    const nearMisses = typeof parsed.nearMisses === "number" ? Math.max(0, Math.round(parsed.nearMisses)) : undefined;
+    const threatPeak = typeof parsed.threatPeak === "number" ? Math.max(0, Math.min(100, Math.round(parsed.threatPeak))) : undefined;
+    const extracted = typeof parsed.extracted === "boolean" ? parsed.extracted : undefined;
+    const targetDistance =
+      typeof parsed.targetDistance === "number" ? Math.max(0, Math.round(parsed.targetDistance)) : undefined;
+    const targetShards = typeof parsed.targetShards === "number" ? Math.max(0, Math.round(parsed.targetShards)) : undefined;
+    const failureReason =
+      parsed.failureReason === "hullBreach" || parsed.failureReason === "missionIncomplete"
+        ? parsed.failureReason
+        : undefined;
+
+    return {
+      ...parsed,
+      nearMisses,
+      threatPeak,
+      extracted,
+      targetDistance,
+      targetShards,
+      failureReason
+    };
   } catch {
     return null;
   }
@@ -73,4 +99,3 @@ export function useExpeditionReport() {
     }
   };
 }
-

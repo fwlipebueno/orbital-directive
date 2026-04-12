@@ -1,7 +1,6 @@
 import type { StationState } from "@orbital/shared";
 import {
   AlertTriangle,
-  ArrowRight,
   ArrowUpCircle,
   CheckCircle2,
   NotebookText,
@@ -71,6 +70,14 @@ export function DashboardPage({ station }: { station: StationState }) {
     [station.modules]
   );
   const isOrbitalWindowOpen = station.missionTelemetry.deltaVWindow === "open";
+  const sectorByRoute: Record<string, string> = {
+    "/dashboard": "command",
+    "/research": "research",
+    "/modules": "engineering",
+    "/incidents": "incidents",
+    "/expedition": "expedition",
+    "/logs": "logs"
+  };
 
   const sectorFocus = useMemo(
     () => [
@@ -162,6 +169,41 @@ export function DashboardPage({ station }: { station: StationState }) {
     ]
   );
 
+  const prioritizedSectorFocus = useMemo(() => {
+    const priorityIds: string[] = [];
+    if (missionState.nextAction.kind === "openRoute") {
+      const nextSector = sectorByRoute[missionState.nextAction.route];
+      if (nextSector) {
+        priorityIds.push(nextSector);
+      }
+    }
+    if (missionState.openIncidents > 0) {
+      priorityIds.push("incidents");
+    }
+    if (degradedModules > 0) {
+      priorityIds.push("engineering");
+    }
+    if (missionState.pressureBand === "critical" || missionState.pressureBand === "emergency") {
+      priorityIds.push("command");
+    }
+    if (isOrbitalWindowOpen) {
+      priorityIds.push("expedition");
+    }
+    priorityIds.push("research", "logs", "command");
+
+    return Array.from(new Set(priorityIds))
+      .map((id) => sectorFocus.find((sector) => sector.id === id))
+      .filter((sector): sector is (typeof sectorFocus)[number] => Boolean(sector))
+      .slice(0, 4);
+  }, [
+    degradedModules,
+    isOrbitalWindowOpen,
+    missionState.nextAction,
+    missionState.openIncidents,
+    missionState.pressureBand,
+    sectorFocus
+  ]);
+
   const recommendedProfile = useMemo(() => {
     if (missionState.nextAction.kind === "applyPreset") {
       return {
@@ -249,50 +291,65 @@ export function DashboardPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4 pb-3">
-      <article className="command-bridge-stage mission-theater hud-frame hud-frame--glow hud-frame--corners grid gap-4 bg-[linear-gradient(180deg,rgba(8,17,30,0.66),rgba(5,11,21,0.92))] p-4 xl:grid-cols-[1.65fr_0.95fr]">
+      <article className="command-bridge-stage mission-theater hud-frame hud-frame--glow hud-frame--corners grid gap-4 bg-[linear-gradient(180deg,rgba(8,17,30,0.66),rgba(5,11,21,0.92))] p-4 xl:grid-cols-[1.72fr_0.88fr]">
         {actionPulse ? (
           <div className="action-pulse-banner absolute right-5 top-5 z-10 rounded-full border border-accent-sky/40 bg-black/38 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-strong">
             {t(`dashboard.actionPulse.${actionPulse}`)}
           </div>
         ) : null}
 
-        <div className="grid gap-3">
-          <EarthViewport station={station} className="min-h-[620px]" />
-          <article className="mission-intent-strip hud-frame hud-frame--corners rounded-2xl border border-white/16 bg-black/28 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="command-scene-stack">
+          <EarthViewport station={station} className="min-h-[640px]" />
+          <article className="scene-mission-overlay hud-frame hud-frame--corners rounded-2xl border border-white/18 bg-black/46 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.eyebrow")}</p>
-                <h2 className="mt-1 font-display text-3xl leading-tight text-ink-strong">{t("dashboard.deck.title")}</h2>
+                <h2 className="mt-1 font-display text-2xl leading-tight text-ink-strong">{t(missionState.primaryThreat.titleKey)}</h2>
               </div>
-              <Radar className="h-6 w-6 text-accent-sky" />
+              <p
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.12em]",
+                  missionState.pressureBand === "emergency"
+                    ? "border-accent-red/60 bg-accent-red/16 text-accent-red"
+                    : missionState.pressureBand === "critical"
+                      ? "border-accent-amber/60 bg-accent-amber/15 text-accent-amber"
+                      : missionState.pressureBand === "watch"
+                        ? "border-accent-sky/55 bg-accent-sky/14 text-accent-sky"
+                        : "border-accent-teal/55 bg-accent-teal/14 text-accent-teal"
+                )}
+              >
+                {t(pressureLabelKey)}
+              </p>
             </div>
-            {minimalNarrativeMode ? null : <p className="mt-2 text-sm text-ink-normal">{t("dashboard.deck.body")}</p>}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                to="/expedition"
-                onMouseEnter={() => audio.playEffect("hover")}
-                onClick={() => audio.playEffect("click")}
-                className="inline-flex items-center justify-center rounded-full border border-accent-sky/58 bg-accent-sky/16 px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-accent-sky transition hover:bg-accent-sky/24"
-              >
-                {t("dashboard.nextAction.cta.expedition")}
-              </Link>
-              <Link
-                to="/research"
-                onMouseEnter={() => audio.playEffect("hover")}
-                onClick={() => audio.playEffect("click")}
-                className="inline-flex items-center justify-center rounded-full border border-accent-teal/56 bg-accent-teal/14 px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-accent-teal transition hover:bg-accent-teal/22"
-              >
-                {t("dashboard.nextAction.cta.research")}
-              </Link>
-              <Link
-                to="/incidents"
-                onMouseEnter={() => audio.playEffect("hover")}
-                onClick={() => audio.playEffect("click")}
-                className="inline-flex items-center justify-center rounded-full border border-accent-amber/56 bg-accent-amber/12 px-3 py-1.5 text-xs uppercase tracking-[0.12em] text-accent-amber transition hover:bg-accent-amber/22"
-              >
-                {t("dashboard.nextAction.cta.incidents")}
-              </Link>
+            <p className="mt-2 text-sm text-ink-normal">{t(missionState.primaryThreat.bodyKey)}</p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/32 p-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-ink-soft">{t("dashboard.deck.nextAction")}</p>
+                <p className="mt-1 text-sm font-medium text-ink-strong">{t(missionState.nextAction.titleKey)}</p>
+                <p className="mt-1 text-xs text-ink-normal">{t(missionState.nextAction.detailKey)}</p>
+              </div>
+              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/32 p-3">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-ink-soft">{t("dashboard.objective.progress")}</p>
+                <p className="mt-1 text-lg font-semibold text-ink-strong">{missionState.objectiveProgress}%</p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  {missionState.objectiveDone}/{missionState.objectiveTotal} {t(`dashboard.loop.${missionState.loopPhase}.title`)}
+                </p>
+              </div>
             </div>
+
+            <button
+              type="button"
+              disabled={pendingAction && missionState.nextAction.kind !== "openRoute"}
+              onMouseEnter={() => audio.playEffect("hover")}
+              onClick={() => {
+                void runPriorityAction(missionState.nextAction);
+              }}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-accent-sky/60 bg-accent-sky/12 px-4 py-2 text-sm text-accent-sky transition hover:bg-accent-sky/18 disabled:opacity-45"
+            >
+              {t(missionState.nextAction.ctaKey)}
+            </button>
+
             <div className="mt-4 grid gap-2 sm:grid-cols-4">
               {(["observe", "stabilize", "respond", "advance"] as const).map((phase) => (
                 <div
@@ -315,33 +372,23 @@ export function DashboardPage({ station }: { station: StationState }) {
           </article>
         </div>
 
-        <aside className="console-surface hud-frame hud-frame--corners bridge-side-stack mission-priority-stack p-4">
-          <section className="mission-priority-segment">
-            <header className="flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.pressure")}</p>
-              <p
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.12em]",
-                  missionState.pressureBand === "emergency"
-                    ? "border-accent-red/60 bg-accent-red/16 text-accent-red"
-                    : missionState.pressureBand === "critical"
-                      ? "border-accent-amber/60 bg-accent-amber/15 text-accent-amber"
-                      : missionState.pressureBand === "watch"
-                        ? "border-accent-sky/55 bg-accent-sky/14 text-accent-sky"
-                        : "border-accent-teal/55 bg-accent-teal/14 text-accent-teal"
-                )}
-              >
-                {t(pressureLabelKey)}
-              </p>
-            </header>
-            <p className="mt-1 text-2xl font-semibold text-ink-strong">{formatNumber(missionState.pressureScore, 0)}%</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
+        <aside className="tactical-command-column console-surface hud-frame hud-frame--corners p-4">
+          <header className="border-b border-white/12 pb-3">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.eyebrow")}</p>
+            <h3 className="mt-1 font-display text-xl text-ink-strong">{t("dashboard.deck.title")}</h3>
+            {minimalNarrativeMode ? null : <p className="mt-1 text-xs text-ink-soft">{t("dashboard.deck.body")}</p>}
+          </header>
+
+          <section className="pt-3">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.pressure")}</p>
+            <p className="mt-1 text-3xl font-semibold text-ink-strong">{formatNumber(missionState.pressureScore, 0)}%</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-accent-teal/82 via-accent-amber/82 to-accent-red/82"
                 style={{ width: `${Math.max(0, Math.min(100, missionState.pressureScore))}%` }}
               />
             </div>
-            <div className="mt-3 grid gap-1 text-xs text-ink-soft">
+            <div className="mt-2 grid gap-1 text-xs text-ink-soft">
               <p>
                 {t("dashboard.objective.progress")} {missionState.objectiveProgress}% ({missionState.objectiveDone}/
                 {missionState.objectiveTotal})
@@ -352,46 +399,27 @@ export function DashboardPage({ station }: { station: StationState }) {
             </div>
           </section>
 
-          <section className="mission-priority-segment">
-            <header className="flex items-center justify-between">
+          <section className="border-t border-white/12 pt-3">
+            <header className="flex items-start justify-between gap-2">
               <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.primaryThreat")}</p>
               <Target className="h-4 w-4 text-accent-amber" />
             </header>
             <p className="mt-1 text-base font-semibold text-ink-strong">{t(missionState.primaryThreat.titleKey)}</p>
             <p className="mt-1 text-sm text-ink-normal">{t(missionState.primaryThreat.bodyKey)}</p>
-            <p className="mt-3 text-xs uppercase tracking-[0.14em] text-ink-soft">
+            <p className="mt-2 text-xs uppercase tracking-[0.14em] text-ink-soft">
               {missionState.primaryThreat.metricUnit === "percent"
                 ? `${formatNumber(missionState.primaryThreat.metricValue, 0)}%`
                 : formatNumber(missionState.primaryThreat.metricValue, 0)}
             </p>
           </section>
 
-          <section className="mission-priority-segment mission-priority-segment--action">
-            <header className="flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.nextAction")}</p>
-              <ShieldAlert className="h-4 w-4 text-accent-sky" />
-            </header>
-            <p className="mt-1 text-base font-semibold text-ink-strong">{t(missionState.nextAction.titleKey)}</p>
-            <p className="mt-1 text-sm text-ink-normal">{t(missionState.nextAction.detailKey)}</p>
-            <button
-              type="button"
-              disabled={pendingAction && missionState.nextAction.kind !== "openRoute"}
-              onMouseEnter={() => audio.playEffect("hover")}
-              onClick={() => {
-                void runPriorityAction(missionState.nextAction);
-              }}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-accent-sky/60 bg-accent-sky/12 px-4 py-2 text-sm text-accent-sky transition hover:bg-accent-sky/18 disabled:opacity-45"
-            >
-              {t(missionState.nextAction.ctaKey)}
-            </button>
-          </section>
-
-          <section className="mission-priority-segment">
+          <section className="border-t border-white/12 pt-3">
             <header className="mb-2 flex items-center justify-between">
               <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.hub.sectorsTitle")}</p>
+              <ShieldAlert className="h-4 w-4 text-accent-sky" />
             </header>
-            <div className="grid gap-1.5">
-              {sectorFocus.map((sector) => {
+            <div className="sector-context-grid grid gap-2">
+              {prioritizedSectorFocus.map((sector) => {
                 const Icon = sector.icon;
                 return (
                   <Link
@@ -399,22 +427,21 @@ export function DashboardPage({ station }: { station: StationState }) {
                     to={sector.to}
                     onMouseEnter={() => audio.playEffect("hover")}
                     onClick={() => audio.playEffect("click")}
-                    className="sector-command-entry"
+                    className="sector-context-chip"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 bg-black/30">
+                    <div className="flex items-start gap-2">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/20 bg-black/28">
                         <Icon className="h-3.5 w-3.5 text-accent-sky" />
                       </span>
-                      <div>
-                        <p className="text-sm font-medium text-ink-strong">{t(sector.titleKey)}</p>
-                        <p className="text-[11px] text-ink-soft">{t(sector.subtitleKey)}</p>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink-strong">{t(sector.titleKey)}</p>
+                        <p className="truncate text-[11px] text-ink-soft">{t(sector.subtitleKey)}</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right leading-tight">
                       <p className="text-sm font-semibold text-ink-strong">{sector.metric}</p>
                       <p className={cn("text-[10px] uppercase tracking-[0.13em]", sector.statusTone)}>{t(sector.statusKey)}</p>
                     </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-ink-soft" />
                   </Link>
                 );
               })}
