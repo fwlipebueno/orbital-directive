@@ -6,7 +6,7 @@ import { useResolveIncidentMutation } from "../hooks/use-station";
 import { getErrorMessage } from "../lib/errors";
 import { formatRelativeDate } from "../lib/format";
 import { newIdempotencyKey } from "../lib/idempotency";
-import { incidentLabel } from "../lib/game-labels";
+import { incidentLabel, incidentSeverityLabel } from "../lib/game-labels";
 
 export function IncidentsPage({ station }: { station: StationState }) {
   const resolveMutation = useResolveIncidentMutation();
@@ -43,7 +43,8 @@ export function IncidentsPage({ station }: { station: StationState }) {
                       {incidentLabel(t, incident.type)}
                     </h3>
                     <p className="mt-1 text-xs text-ink-soft">
-                      {t("incidents.severity")} {incident.severity} | {t("incidents.started")} {formatRelativeDate(incident.startedAt)}
+                      {t("incidents.severity")} {incidentSeverityLabel(t, incident.severity)} | {t("incidents.started")}{" "}
+                      {formatRelativeDate(incident.startedAt)}
                     </p>
                   </div>
                   <button

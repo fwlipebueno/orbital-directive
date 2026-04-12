@@ -64,7 +64,7 @@ const scenes: Record<SceneId, SpaceSceneDefinition> = {
     title: "Deep Field Traverse",
     subtitle: "Exploration mission lane",
     imageUrl:
-      "https://upload.wikimedia.org/wikipedia/commons/8/80/ESO_-_Milky_Way.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/6/60/ESO_-_Milky_Way.jpg",
     focal: "center 50%",
     overlay:
       "linear-gradient(180deg, rgba(2,7,14,0.2), rgba(2,7,14,0.82)), radial-gradient(circle at 54% 74%, rgba(112,188,255,0.34), transparent 54%), radial-gradient(circle at 24% 16%, rgba(255,214,163,0.14), transparent 42%)",

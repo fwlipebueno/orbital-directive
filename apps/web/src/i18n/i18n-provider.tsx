@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   useCallback,
   useContext,
@@ -12,6 +12,10 @@ import { AppLocale, localeOptions, messages } from "./messages";
 
 const STORAGE_KEY = "orbital-directive-locale";
 const defaultLocale: AppLocale = "en-US";
+const missingTranslationFallback: Record<AppLocale, string> = {
+  "en-US": "Translation unavailable",
+  "pt-BR": "Tradução indisponível"
+};
 
 type TranslationParams = Record<string, string | number>;
 
@@ -78,8 +82,13 @@ export function I18nProvider({ children }: PropsWithChildren) {
   const t = useCallback(
     (key: string, params?: TranslationParams) => {
       const catalog = messages[locale];
-      const fallbackCatalog = messages[defaultLocale];
-      const message = catalog[key] ?? fallbackCatalog[key] ?? key;
+      const message = catalog[key];
+      if (!message) {
+        if (import.meta.env.DEV) {
+          return `[i18n:${locale}:missing] ${key}`;
+        }
+        return locale === defaultLocale ? key : missingTranslationFallback[locale];
+      }
       return interpolate(message, params);
     },
     [locale]
@@ -104,4 +113,5 @@ export function useI18n() {
   }
   return context;
 }
+
 

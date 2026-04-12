@@ -1,11 +1,16 @@
-import type { StationState } from "@orbital/shared";
+import type { ResourceType, StationState } from "@orbital/shared";
 import { BarChart3 } from "lucide-react";
 import { useI18n } from "../i18n/i18n-provider";
 import { useRunSummaries } from "../hooks/use-station";
 import { formatRelativeDate } from "../lib/format";
-import { severityLabel } from "../lib/game-labels";
+import { resourceLabel, severityLabel } from "../lib/game-labels";
 
 const knownSeverities: StationState["runSummary"]["severity"][] = ["normal", "attention", "alert", "crisis"];
+const knownResources: ResourceType[] = ["energy", "oxygen", "water", "food", "credits", "research", "hullIntegrity", "morale"];
+
+function isResourceType(value: string): value is ResourceType {
+  return knownResources.includes(value as ResourceType);
+}
 
 function severityWeight(severity: StationState["runSummary"]["severity"]): number {
   switch (severity) {
@@ -69,6 +74,10 @@ export function RunSummaryPage({ station }: { station: StationState }) {
                 ? (summary.severity as StationState["runSummary"]["severity"])
                 : "attention";
               const weight = severityWeight(severity);
+              const criticalResources =
+                summary.criticalResources.length > 0
+                  ? summary.criticalResources.map((resource) => (isResourceType(resource) ? resourceLabel(t, resource) : resource)).join(", ")
+                  : t("run.none");
 
               return (
                 <li key={String(summary.id)} className="rounded-[18px] border border-white/12 bg-black/22 p-4">
@@ -87,8 +96,7 @@ export function RunSummaryPage({ station }: { station: StationState }) {
                   </div>
 
                   <p className="mt-2 text-xs text-ink-soft">
-                    {t("run.severity")} {severityLabel(t, severity)} | {t("run.critical")}:{" "}
-                    {summary.criticalResources.join(", ") || t("run.none")}
+                    {t("run.severity")} {severityLabel(t, severity)} | {t("run.critical")}: {criticalResources}
                   </p>
                 </li>
               );

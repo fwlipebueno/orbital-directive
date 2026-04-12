@@ -290,7 +290,7 @@ export function ModulesPage({ station }: { station: StationState }) {
                     <circle cx={0} cy={0} r={4.3} className="power-pulse" fill={coreColor} />
                     {selected ? <circle cx={0} cy={0} r={12.4} fill="none" stroke="rgba(122,208,255,0.72)" strokeWidth={1} /> : null}
                     <text x={0} y={-13.5} className="fill-white/78 text-[3px] tracking-[0.22em]" textAnchor="middle">
-                      {node.type}
+                      {moduleLabel(t, node.type)}
                     </text>
                   </g>
                 );

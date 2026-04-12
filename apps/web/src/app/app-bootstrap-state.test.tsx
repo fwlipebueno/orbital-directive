@@ -212,7 +212,7 @@ describe("App bootstrap states", () => {
 
     renderApp();
 
-    expect(screen.getByText(/Immediate priorities/i)).toBeTruthy();
+    expect(screen.getByText(/Mission control cycle/i)).toBeTruthy();
   });
 
   it("shows unexpected bootstrap error for non-401 auth failures", () => {

@@ -18,3 +18,12 @@ export function severityLabel(t: Translator, severity: StationSeverityState): st
   return t(`state.${severity}`);
 }
 
+export function incidentSeverityLabel(t: Translator, severity: number): string {
+  if (severity <= 1) {
+    return t("incidents.severity.low");
+  }
+  if (severity === 2) {
+    return t("incidents.severity.medium");
+  }
+  return t("incidents.severity.high");
+}

@@ -430,7 +430,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         context.moveTo(x, y);
         context.lineTo(x, y + streakLength);
         context.stroke();
-      });
+      }
 
       context.strokeStyle = "rgba(122,208,255,0.22)";
       context.lineWidth = 1;

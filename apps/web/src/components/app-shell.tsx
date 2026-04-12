@@ -9,8 +9,6 @@ import {
   LogOut,
   Music2,
   NotebookText,
-  PanelLeftClose,
-  PanelLeftOpen,
   Rocket,
   Settings,
   SlidersHorizontal,
@@ -67,7 +65,6 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
   const { minimalNarrativeMode, setMinimalNarrativeMode, reducedSensoryMode } = useUiPreferences();
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [hudOpen, setHudOpen] = useState(false);
-  const [navCollapsed, setNavCollapsed] = useState(false);
   const [routeTransitioning, setRouteTransitioning] = useState(false);
   const [routeContentHidden, setRouteContentHidden] = useState(false);
   const [transitionLabel, setTransitionLabel] = useState<{ from: SceneId; to: SceneId } | null>(null);
@@ -271,70 +268,24 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
           introOpen && introShellReveal && "intro-shell-revealing"
         )}
       >
-        <div className="orbital-layout" data-nav-collapsed={navCollapsed ? "true" : "false"}>
-          <aside className={cn("tactical-dock glass-panel lg:sticky lg:top-3 lg:h-[calc(100vh-1.5rem)]", navCollapsed ? "px-2" : "")}>
-            <header className={cn("mb-5 border-b border-white/15 pb-4", navCollapsed ? "px-1" : "")}>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                {!navCollapsed ? (
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-ink-soft">{t("shell.dockEyebrow")}</p>
-                ) : null}
-                <button
-                  type="button"
-                  onMouseEnter={() => audio.playEffect("hover")}
-                  onClick={() => {
-                    audio.playEffect("click");
-                    setNavCollapsed((previous) => !previous);
-                  }}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-black/25 text-ink-soft transition hover:border-accent-sky/40 hover:text-ink-strong"
-                  aria-label={navCollapsed ? t("shell.expandNav") : t("shell.collapseNav")}
-                  title={navCollapsed ? t("shell.expandNav") : t("shell.collapseNav")}
-                >
-                  {navCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                </button>
-              </div>
+        <header className="command-rail glass-panel hud-frame hud-frame--glow hud-frame--corners">
+          <div className="command-rail-main">
+            <div className="command-rail-id">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-ink-soft">{t("shell.dockEyebrow")}</p>
+              <h1 className="mt-1 font-display text-[1.35rem] leading-tight text-ink-strong">{station.stationName}</h1>
+              <p className="mt-1 text-xs text-ink-soft">
+                {t("common.commander")}: {userName} | {t("shell.header.lastSync")} {formatRelativeDate(station.lastProcessedAt)}
+              </p>
+            </div>
 
-              {!navCollapsed ? (
-                <>
-                  <h1 className="mt-3 font-display text-xl">{station.stationName}</h1>
-                  <p className="mt-1 text-xs text-ink-soft">
-                    {t("common.commander")}: {userName}
-                  </p>
-                </>
-              ) : null}
+            <div className="command-rail-meta">
+              <SeverityBadge severity={station.runSummary.severity} />
+              <p className="rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-ink-soft">
+                {scene.credit.label}
+              </p>
+            </div>
 
-              <div className={cn("mt-4", navCollapsed ? "flex justify-center" : "")}>
-                <SeverityBadge severity={station.runSummary.severity} />
-              </div>
-            </header>
-
-            <nav className="grid gap-1.5">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onMouseEnter={() => audio.playEffect("hover")}
-                    onClick={() => audio.playEffect("click")}
-                    className={({ isActive }) =>
-                      cn(
-                        "nav-chip group flex items-center gap-2.5 px-3 py-2 text-sm",
-                        navCollapsed && "justify-center px-2",
-                        isActive
-                          ? "border-accent-sky/56 bg-accent-sky/18 text-ink-strong shadow-[0_0_0_1px_rgba(122,208,255,0.24),0_12px_24px_rgba(5,15,30,0.36)]"
-                          : "text-ink-normal hover:bg-white/[0.06]"
-                      )
-                    }
-                    title={t(item.labelKey)}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {!navCollapsed ? <span>{t(item.labelKey)}</span> : null}
-                  </NavLink>
-                );
-              })}
-            </nav>
-
-            <footer className="mt-6 border-t border-white/12 pt-4">
+            <div className="command-rail-actions">
               <button
                 type="button"
                 onMouseEnter={() => audio.playEffect("hover")}
@@ -343,15 +294,27 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
                   setHudOpen((previous) => !previous);
                 }}
                 className={cn(
-                  "mb-2 flex w-full items-center justify-center gap-2 rounded-full border px-3 py-2 text-sm transition",
+                  "inline-flex items-center justify-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.12em] transition",
                   hudOpen
                     ? "border-accent-sky/60 bg-accent-sky/14 text-ink-strong"
                     : "border-white/20 bg-black/25 text-ink-normal hover:border-accent-sky/45"
                 )}
-                title={t("shell.controlsButton")}
               >
-                <SlidersHorizontal className="h-4 w-4" />
-                {!navCollapsed ? t("shell.controlsButton") : null}
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {t("shell.controlsButton")}
+              </button>
+
+              <button
+                type="button"
+                onMouseEnter={() => audio.playEffect("hover")}
+                onClick={() => {
+                  audio.playEffect("tutorial");
+                  setTutorialOpen(true);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-black/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-ink-normal transition hover:border-accent-sky/45 hover:text-ink-strong"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                {t("tutorial.button")}
               </button>
 
               <button
@@ -361,58 +324,72 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
                   audio.playEffect("click");
                   void onLogout();
                 }}
-                className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-full border border-accent-red/55 px-3 py-2 text-sm text-accent-red transition hover:bg-accent-red/10",
-                  navCollapsed ? "px-2" : ""
-                )}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-accent-red/55 px-3 py-2 text-xs uppercase tracking-[0.12em] text-accent-red transition hover:bg-accent-red/10"
                 title={t("common.logout")}
               >
-                <LogOut className="h-4 w-4" />
-                {!navCollapsed ? t("common.logout") : null}
+                <LogOut className="h-3.5 w-3.5" />
+                {t("common.logout")}
               </button>
-            </footer>
-          </aside>
-
-          <section className="grid min-h-[80vh] grid-rows-[auto_1fr] gap-3">
-            <header className="hud-header flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-ink-soft">{t("shell.header.eyebrow")}</p>
-                <h2 className="mt-1 flex items-center gap-2 font-display text-2xl text-ink-strong">
-                  <Bot className="h-5 w-5 text-accent-sky" />
-                  {scene.title}
-                </h2>
-                {minimalNarrativeMode ? null : <p className="mt-1 max-w-3xl text-xs text-ink-soft">{sceneContext}</p>}
-              </div>
-
-              <div className="grid gap-1.5">
-                <p className="rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-ink-soft">
-                  {scene.credit.label}
-                </p>
-                <p className="rounded-full border border-white/12 bg-black/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-ink-soft">
-                  {t("shell.header.lastSync")} {formatRelativeDate(station.lastProcessedAt)}
-                </p>
-              </div>
-            </header>
-
-            <div className="route-stage">
-              {routeTransitioning ? (
-                <div className="route-cinematic-overlay">
-                  {transitionLabel ? (
-                    <div className="sector-transition-label">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-ink-soft">{t("transition.eyebrow")}</p>
-                      <p className="mt-1 font-display text-lg text-ink-strong">
-                        {t(`transition.scene.${transitionLabel.from}`)} {t("transition.to")} {t(`transition.scene.${transitionLabel.to}`)}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <main key={location.pathname} className={cn("grid gap-4 pb-3", routeContentHidden && "route-content-hold")}>
-                {children}
-              </main>
             </div>
-          </section>
-        </div>
+          </div>
+
+          <nav className="sector-rail" aria-label={t("shell.navAria")}>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onMouseEnter={() => audio.playEffect("hover")}
+                  onClick={() => audio.playEffect("click")}
+                  className={({ isActive }) =>
+                    cn(
+                      "sector-tab group flex min-w-max items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.12em] transition",
+                      isActive
+                        ? "border-accent-sky/56 bg-accent-sky/18 text-ink-strong shadow-[0_0_0_1px_rgba(122,208,255,0.24),0_10px_22px_rgba(5,15,30,0.34)]"
+                        : "border-white/15 bg-black/20 text-ink-normal hover:border-accent-sky/42 hover:bg-white/[0.06]"
+                    )
+                  }
+                  title={t(item.labelKey)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{t(item.labelKey)}</span>
+                </NavLink>
+              );
+            })}
+          </nav>
+        </header>
+
+        <section className="route-shell grid min-h-[80vh] grid-rows-[auto_1fr] gap-3">
+          <header className="hud-header hud-frame hud-frame--corners flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-ink-soft">{t("shell.header.eyebrow")}</p>
+              <h2 className="mt-1 flex items-center gap-2 font-display text-2xl text-ink-strong">
+                <Bot className="h-5 w-5 text-accent-sky" />
+                {t(`transition.scene.${sceneId}`)}
+              </h2>
+              {minimalNarrativeMode ? null : <p className="mt-1 max-w-3xl text-xs text-ink-soft">{sceneContext}</p>}
+            </div>
+          </header>
+
+          <div className="route-stage">
+            {routeTransitioning ? (
+              <div className="route-cinematic-overlay">
+                {transitionLabel ? (
+                  <div className="sector-transition-label">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-ink-soft">{t("transition.eyebrow")}</p>
+                    <p className="mt-1 font-display text-lg text-ink-strong">
+                      {t(`transition.scene.${transitionLabel.from}`)} {t("transition.to")} {t(`transition.scene.${transitionLabel.to}`)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <main key={location.pathname} className={cn("grid gap-4 pb-3", routeContentHidden && "route-content-hold")}>
+              {children}
+            </main>
+          </div>
+        </section>
       </div>
 
       <aside
