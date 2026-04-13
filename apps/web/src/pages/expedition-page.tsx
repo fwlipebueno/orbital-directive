@@ -1023,9 +1023,9 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       // ── Screen overlays ───────────────────────────────────────────────
       if (g.hitFlash > 0.01) {
-        ctx.fillStyle=`rgba(255,36,26,${g.hitFlash*0.30})`; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle=`rgba(255,36,26,${g.hitFlash*0.18})`; ctx.fillRect(0,0,W,H);
         const vg=ctx.createRadialGradient(W/2,H/2,H*0.18,W/2,H/2,H*0.70);
-        vg.addColorStop(0,"transparent"); vg.addColorStop(1,`rgba(255,36,26,${g.hitFlash*0.52})`);
+        vg.addColorStop(0,"transparent"); vg.addColorStop(1,`rgba(255,36,26,${g.hitFlash*0.24})`);
         ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
       }
       if (g.beaconFlash>0.01){ ctx.fillStyle=`rgba(75,218,255,${g.beaconFlash*0.17})`; ctx.fillRect(0,0,W,H); }
@@ -1249,8 +1249,8 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
           {/* Objective strip — bottom */}
           {livePhase ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-[88px] z-20 flex justify-center px-4">
-              <div className="max-w-xl rounded-2xl border border-white/14 bg-black/64 px-4 py-2.5 text-center backdrop-blur-sm">
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
+              <div className="max-w-2xl rounded-2xl border border-white/14 bg-black/62 px-4 py-2 text-center backdrop-blur-sm">
                 <p className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">Objetivo atual</p>
                 <p className="mt-0.5 text-sm font-medium text-ink-strong">{objectiveLine}</p>
               </div>
