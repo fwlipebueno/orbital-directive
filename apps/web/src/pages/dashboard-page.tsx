@@ -540,6 +540,19 @@ export function DashboardPage({ station }: { station: StationState }) {
               <p className="mt-1 text-sm text-ink-normal">
                 {t("dashboard.expeditionIntel.hintLabel")} {t(`dashboard.expeditionIntel.hint.${activeExpeditionHint}`)}
               </p>
+              {expeditionReport ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                    Distância <span className="text-ink-strong">{formatNumber(expeditionReport.distance, 0)} km</span>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                    Dados <span className="text-ink-strong">{expeditionReport.dataShards}</span>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                    Pico <span className="text-ink-strong">{formatNumber(expeditionReport.threatPeak ?? 0, 0)}%</span>
+                  </div>
+                </div>
+              ) : null}
               <button
                 type="button"
                 disabled={commandMutation.isPending}
