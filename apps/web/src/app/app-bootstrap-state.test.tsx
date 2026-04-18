@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StationState } from "@orbital/shared";
 import { App } from "./App";
 import { AppProviders } from "./providers";
@@ -153,6 +153,7 @@ describe("App bootstrap states", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
     localStorage.setItem("orbital-directive-locale", "en-US");
+    sessionStorage.setItem("orbital-directive-cinematic-intro-played", "true");
     isUnauthorizedErrorMock.mockReset();
     useApiHealthMock.mockReturnValue(defaultHealth);
     useAuthSessionMock.mockReturnValue({
@@ -173,6 +174,10 @@ describe("App bootstrap states", () => {
     useEmergencyReserveMutationMock.mockReturnValue({ ...noopMutation, error: null });
   });
 
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
   it("shows backend unavailable when healthcheck fails", () => {
     useApiHealthMock.mockReturnValue({
       isLoading: false,
@@ -186,7 +191,7 @@ describe("App bootstrap states", () => {
     expect(screen.getByText(/Backend command channel unavailable/i)).toBeTruthy();
   });
 
-  it("treats 401 auth.me as unauthenticated and renders login", () => {
+  it("treats 401 auth.me as unauthenticated and renders login", async () => {
     const unauthorizedError = new Error("401 Unauthorized");
     useAuthSessionMock.mockReturnValue({
       isLoading: false,
@@ -198,10 +203,10 @@ describe("App bootstrap states", () => {
 
     renderApp();
 
-    expect(screen.getByText(/Enter mission command/i)).toBeTruthy();
+    expect(await screen.findByText(/Enter mission command/i)).toBeTruthy();
   });
 
-  it("renders authenticated dashboard flow when session exists", () => {
+  it("renders authenticated dashboard flow when session exists", async () => {
     window.history.replaceState({}, "", "/dashboard");
     useAuthSessionMock.mockReturnValue({
       isLoading: false,
@@ -212,7 +217,7 @@ describe("App bootstrap states", () => {
 
     renderApp();
 
-    expect(screen.getByText(/Mission control cycle/i)).toBeTruthy();
+    expect(await screen.findByText(/Mission control cycle/i)).toBeTruthy();
   });
 
   it("shows unexpected bootstrap error for non-401 auth failures", () => {

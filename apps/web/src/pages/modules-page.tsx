@@ -148,14 +148,6 @@ export function ModulesPage({ station }: { station: StationState }) {
 
   return (
     <section className="grid gap-4">
-      <header className="depth-panel flex items-center justify-between rounded-[24px] border border-white/16 p-5 shadow-[0_20px_34px_rgba(2,7,16,0.42)]">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("modules.eyebrow")}</p>
-          <h2 className="font-display text-2xl">{t("modules.title")}</h2>
-          <p className="mt-1 text-sm text-ink-soft">{t("modules.subtitle")}</p>
-        </div>
-        <Wrench className="h-6 w-6 text-accent-sky" />
-      </header>
 
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
         <article className="engineering-theater depth-panel rounded-[24px] border border-white/14 p-4">

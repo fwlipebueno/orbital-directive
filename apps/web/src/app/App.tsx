@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "../components/app-shell";
 import { BootstrapErrorScreen } from "../components/bootstrap-error-screen";
@@ -9,17 +9,18 @@ import { useStationState } from "../hooks/use-station";
 import { useI18n } from "../i18n/i18n-provider";
 import type { AuthMe } from "../lib/api";
 import { getErrorMessage, isUnauthorizedError } from "../lib/errors";
-import { DashboardPage } from "../pages/dashboard-page";
-import { DemoEntryPage } from "../pages/demo-entry-page";
-import { IncidentsPage } from "../pages/incidents-page";
-import { LoginPage } from "../pages/login-page";
-import { LogsPage } from "../pages/logs-page";
-import { ExpeditionPage } from "../pages/expedition-page";
-import { ModulesPage } from "../pages/modules-page";
-import { ResearchPage } from "../pages/research-page";
-import { RunSummaryPage } from "../pages/run-summary-page";
-import { SettingsPage } from "../pages/settings-page";
 import { useUiPreferences } from "./ui-context";
+
+const DashboardPage = lazy(async () => import("../pages/dashboard-page").then((module) => ({ default: module.DashboardPage })));
+const DemoEntryPage = lazy(async () => import("../pages/demo-entry-page").then((module) => ({ default: module.DemoEntryPage })));
+const ExpeditionPage = lazy(async () => import("../pages/expedition-page").then((module) => ({ default: module.ExpeditionPage })));
+const IncidentsPage = lazy(async () => import("../pages/incidents-page").then((module) => ({ default: module.IncidentsPage })));
+const LoginPage = lazy(async () => import("../pages/login-page").then((module) => ({ default: module.LoginPage })));
+const LogsPage = lazy(async () => import("../pages/logs-page").then((module) => ({ default: module.LogsPage })));
+const ModulesPage = lazy(async () => import("../pages/modules-page").then((module) => ({ default: module.ModulesPage })));
+const ResearchPage = lazy(async () => import("../pages/research-page").then((module) => ({ default: module.ResearchPage })));
+const RunSummaryPage = lazy(async () => import("../pages/run-summary-page").then((module) => ({ default: module.RunSummaryPage })));
+const SettingsPage = lazy(async () => import("../pages/settings-page").then((module) => ({ default: module.SettingsPage })));
 
 type AppBootstrapState =
   | "bootstrapping"
@@ -101,17 +102,19 @@ function AuthenticatedRoutes({ authSession }: { authSession: AuthMe }) {
           await logoutMutation.mutateAsync().catch(() => undefined);
         }}
       >
-        <Routes>
-          <Route path="/dashboard" element={<DashboardPage station={stationQuery.data} />} />
-          <Route path="/expedition" element={<ExpeditionPage station={stationQuery.data} />} />
-          <Route path="/modules" element={<ModulesPage station={stationQuery.data} />} />
-          <Route path="/research" element={<ResearchPage station={stationQuery.data} />} />
-          <Route path="/incidents" element={<IncidentsPage station={stationQuery.data} />} />
-          <Route path="/logs" element={<LogsPage station={stationQuery.data} />} />
-          <Route path="/run-summary" element={<RunSummaryPage station={stationQuery.data} />} />
-          <Route path="/settings" element={<SettingsPage station={stationQuery.data} />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <Suspense fallback={<LoadingScreen label={t("loading.commandLink")} />}>
+          <Routes>
+            <Route path="/dashboard" element={<DashboardPage station={stationQuery.data} />} />
+            <Route path="/expedition" element={<ExpeditionPage station={stationQuery.data} />} />
+            <Route path="/modules" element={<ModulesPage station={stationQuery.data} />} />
+            <Route path="/research" element={<ResearchPage station={stationQuery.data} />} />
+            <Route path="/incidents" element={<IncidentsPage station={stationQuery.data} />} />
+            <Route path="/logs" element={<LogsPage station={stationQuery.data} />} />
+            <Route path="/run-summary" element={<RunSummaryPage station={stationQuery.data} />} />
+            <Route path="/settings" element={<SettingsPage station={stationQuery.data} />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Suspense>
       </AppShell>
     </div>
   );
@@ -119,11 +122,13 @@ function AuthenticatedRoutes({ authSession }: { authSession: AuthMe }) {
 
 function UnauthenticatedRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/demo" element={<DemoEntryPage />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/demo" element={<DemoEntryPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

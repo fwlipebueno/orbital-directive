@@ -300,7 +300,7 @@ export function DashboardPage({ station }: { station: StationState }) {
 
         <div className="command-scene-stack">
           <EarthViewport station={station} className="min-h-[640px]" />
-          <article className="scene-mission-overlay hud-frame hud-frame--corners rounded-2xl border border-white/18 bg-black/46 p-4">
+          <article className="scene-mission-overlay hud-frame hud-frame--corners rounded-2xl border border-white/18 bg-[linear-gradient(180deg,rgba(4,10,18,0.82),rgba(3,8,15,0.92))] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("dashboard.deck.eyebrow")}</p>
@@ -324,15 +324,23 @@ export function DashboardPage({ station }: { station: StationState }) {
             <p className="mt-2 text-sm text-ink-normal">{t(missionState.primaryThreat.bodyKey)}</p>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/32 p-3">
+              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/42 p-3">
                 <p className="text-[10px] uppercase tracking-[0.13em] text-ink-soft">{t("dashboard.deck.nextAction")}</p>
                 <p className="mt-1 text-sm font-medium text-ink-strong">{t(missionState.nextAction.titleKey)}</p>
                 <p className="mt-1 text-xs text-ink-normal">{t(missionState.nextAction.detailKey)}</p>
               </div>
-              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/32 p-3">
-                <p className="text-[10px] uppercase tracking-[0.13em] text-ink-soft">{t("dashboard.objective.progress")}</p>
-                <p className="mt-1 text-lg font-semibold text-ink-strong">{missionState.objectiveProgress}%</p>
-                <p className="mt-1 text-xs text-ink-soft">
+              <div className="scene-overlay-stat rounded-xl border border-white/14 bg-black/42 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] uppercase tracking-[0.13em] text-ink-soft">{t("dashboard.objective.progress")}</p>
+                  <p className="text-lg font-semibold text-ink-strong">{missionState.objectiveProgress}%</p>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full border border-white/12 bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-accent-sky/88 via-accent-teal/82 to-accent-amber/74 transition-[width]"
+                    style={{ width: `${Math.max(0, Math.min(100, missionState.objectiveProgress))}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-ink-soft">
                   {missionState.objectiveDone}/{missionState.objectiveTotal} {t(`dashboard.loop.${missionState.loopPhase}.title`)}
                 </p>
               </div>
@@ -345,7 +353,7 @@ export function DashboardPage({ station }: { station: StationState }) {
               onClick={() => {
                 void runPriorityAction(missionState.nextAction);
               }}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-accent-sky/60 bg-accent-sky/12 px-4 py-2 text-sm text-accent-sky transition hover:bg-accent-sky/18 disabled:opacity-45"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-accent-sky/60 bg-accent-sky/14 px-4 py-2 text-sm text-accent-sky shadow-[0_0_28px_rgba(122,208,255,0.08)] transition hover:bg-accent-sky/20 disabled:opacity-45"
             >
               {t(missionState.nextAction.ctaKey)}
             </button>
@@ -541,7 +549,19 @@ export function DashboardPage({ station }: { station: StationState }) {
                 {t("dashboard.expeditionIntel.hintLabel")} {t(`dashboard.expeditionIntel.hint.${activeExpeditionHint}`)}
               </p>
               {expeditionReport ? (
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                      {t("expedition.distance")} <span className="text-ink-strong">{formatNumber(expeditionReport.distance, 0)} km</span>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                      {t("expedition.shards")} <span className="text-ink-strong">{expeditionReport.dataShards}</span>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
+                      {t("expedition.threatPeak")} <span className="text-ink-strong">{formatNumber(expeditionReport.threatPeak ?? 0, 0)}%</span>
+                    </div>
+                  </div>
+                <div className="hidden mt-2 grid gap-2 sm:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-normal">
                     Distância <span className="text-ink-strong">{formatNumber(expeditionReport.distance, 0)} km</span>
                   </div>
@@ -552,6 +572,7 @@ export function DashboardPage({ station }: { station: StationState }) {
                     Pico <span className="text-ink-strong">{formatNumber(expeditionReport.threatPeak ?? 0, 0)}%</span>
                   </div>
                 </div>
+                </>
               ) : null}
               <button
                 type="button"

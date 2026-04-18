@@ -1,5 +1,5 @@
 ﻿import type { IncidentType, ModuleType } from "@orbital/shared";
-import { incidentLabel, moduleLabel } from "./game-labels";
+import { incidentLabel, incidentSeverityLabel, moduleLabel } from "./game-labels";
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
 type Locale = "pt-BR" | "en-US";
@@ -16,6 +16,8 @@ function getResearchLabel(upgradeKey: string, locale: Locale): string {
 
 export function localizeLogType(type: string, t: Translator): string {
   switch (type) {
+    case "incident":
+      return t("logs.type.incident");
     case "event":
       return t("logs.type.event");
     case "action":
@@ -28,6 +30,20 @@ export function localizeLogType(type: string, t: Translator): string {
 }
 
 export function localizeMissionLogMessage(message: string, t: Translator, locale: Locale): string {
+  const incidentDetected = message.match(/^Incident detected: ([a-zA-Z]+) \(severity (\d+)\)$/);
+  if (incidentDetected) {
+    const incidentType = incidentDetected[1];
+    const severityText = incidentDetected[2];
+    const severity = Number(severityText);
+    if (!incidentType || !Number.isFinite(severity)) {
+      return message;
+    }
+    return t("log.incident.detected", {
+      incident: incidentLabel(t as (key: string) => string, incidentType as IncidentType),
+      severity: incidentSeverityLabel(t as (key: string) => string, severity)
+    });
+  }
+
   const moduleUpgrade = message.match(/^Module ([a-zA-Z]+) upgraded to level (\d+)$/);
   if (moduleUpgrade) {
     const moduleType = moduleUpgrade[1];
@@ -107,6 +123,8 @@ export function localizeMissionLogMessage(message: string, t: Translator, locale
   switch (message) {
     case "Orbital eclipse window detected. Solar intake is reduced.":
       return t("log.event.eclipse");
+    case "Thermal load is beyond nominal envelope. Redistribute subsystem priorities.":
+      return t("log.event.thermalLoad");
     case "Orbital correction burn executed successfully.":
       return t("log.action.orbitalBurn");
     case "Emergency reserve package deployed.":

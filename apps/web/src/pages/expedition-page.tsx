@@ -51,11 +51,10 @@ const PLAYER_Y_FRAC  = 0.81;
 const SAFE_SECS      = 14;
 const HIT_IFRAMES    = 1.1;
 const DEATH_DURATION = 0.55;
-const WORM_START     = 22;   // seconds before wormhole opens
-const WORM_OPEN      = 15;   // how long window stays
+const WORM_START     = 22;
+const WORM_OPEN      = 15;
 const WORM_TRAVEL    = 4.0;
 
-// Zone thresholds by elapsed fraction
 const Z_DEEP   = 0.30;
 const Z_EXTR   = 0.70;
 
@@ -64,10 +63,12 @@ function zone(elapsed: number): MissionZone {
   return f >= Z_EXTR ? "extraction" : f >= Z_DEEP ? "deepField" : "entry";
 }
 
+const MISSION_ZONES: MissionZone[] = ["entry", "deepField", "extraction"];
+
 const ZONE_META = {
-  entry:     { color: "#7ad0ff", nebula: "rgba(40,80,200,0.10)",  label: "Corredor de entrada"   },
-  deepField: { color: "#c07aff", nebula: "rgba(100,40,160,0.16)", label: "Campo profundo"        },
-  extraction:{ color: "#ff9060", nebula: "rgba(200,80,50,0.18)",  label: "Janela de extração"    },
+  entry: { color: "#7ad0ff", nebula: "rgba(40,80,200,0.10)", label: "Entry corridor" },
+  deepField: { color: "#c07aff", nebula: "rgba(100,40,160,0.16)", label: "Deep field" },
+  extraction: { color: "#ff9060", nebula: "rgba(200,80,50,0.18)", label: "Extraction window" }
 } as const;
 
 function makePolygon(n: number): number[] {
@@ -90,12 +91,55 @@ function calcScore(dist: number, beacons: number, hits: number, z: MissionZone):
   return Math.max(0, Math.round((dist * 2.6 + beacons * 170 - hits * 190) * bonus));
 }
 
+// ─── Hull border class map (Tailwind precisa de classes estáticas) ────────
+const EMPTY_EXPEDITION_REPORT: ExpeditionReport = {
+  id: "exp-empty",
+  createdAt: "",
+  distance: 0,
+  dataShards: 0,
+  collisions: 0,
+  nearMisses: 0,
+  threatPeak: 0,
+  targetShards: 0,
+  score: 0,
+  outcome: "failure",
+  hint: "engineering",
+  extracted: false,
+  failureReason: "hullBreach"
+};
+
+function hullBorderClass(hitsRemaining: number, hullPercent: number): string {
+  if (hitsRemaining <= 1) return "border-accent-red/30";
+  if (hitsRemaining <= 2) return "border-accent-amber/30";
+  if (hullPercent <= 55)  return "border-accent-amber/30";
+  return "border-accent-teal/30";
+}
+
 // ─── Componente ────────────────────────────────────────────────────────────
 export function ExpeditionPage({ station }: { station: StationState }): ReactElement {
   const audio             = useAudio();
   const { t }             = useI18n();
   const { reducedSensoryMode } = useUiPreferences();
-  const { report: lastReport, setReport } = useExpeditionReport();
+  const { report: storedLastReport, setReport } = useExpeditionReport();
+  const zoneCopy = useMemo(
+    () => ({
+      entry: {
+        label: t("expedition.zone.entry"),
+        description: t("expedition.zone.entryDesc")
+      },
+      deepField: {
+        label: t("expedition.zone.deepField"),
+        description: t("expedition.zone.deepFieldDesc")
+      },
+      extraction: {
+        label: t("expedition.zone.extraction"),
+        description: t("expedition.zone.extractionDesc")
+      }
+    }),
+    [t]
+  );
+  const lastReport = storedLastReport ?? EMPTY_EXPEDITION_REPORT;
+  const hasLastReport = Boolean(storedLastReport);
 
   const [phase,       setPhase]       = useState<GamePhase>("briefing");
   const [curZone,     setCurZone]     = useState<MissionZone>("entry");
@@ -129,8 +173,8 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
     pushTick:0,
   });
   const inputRef    = useRef<Input>({ left:false, right:false, boost:false });
-  const starsA      = useRef<Star[]>([]);  // near
-  const starsB      = useRef<Star[]>([]);  // far
+  const starsA      = useRef<Star[]>([]);
+  const starsB      = useRef<Star[]>([]);
   const dust        = useRef<Star[]>([]);
   const entities    = useRef<Entity[]>([]);
   const particles   = useRef<Particle[]>([]);
@@ -292,6 +336,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
   }, [audio, tuning, setReport]);
 
   // ─── Reset & start ────────────────────────────────────────────────────────
+  // FIX: resetAll não seta fase — startRun é dono do fluxo de fase.
   const resetAll = useCallback(() => {
     Object.assign(R.current, {
       elapsed:0, dist:0, beacons:0, hits:0,
@@ -305,7 +350,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
     entities.current  = [];
     particles.current = [];
     buildStarfield();
-    setPhase("briefing"); // temporary — will immediately go to "running" in startRun
     setCurZone("entry");
     setZoneFlash(null);
     setHullPercent(100);
@@ -317,15 +361,13 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
     setWormState("idle");
   }, [buildStarfield]);
 
+  // FIX: sem setTimeout — React 18 batcha os setStates do resetAll + setPhase num único commit.
   const startRun = useCallback(() => {
     resetAll();
+    R.current.resolved = false;
+    setFinishedReport(null);
     audio.playEffect("transition");
-    // small timeout so state flushes before starting loop
-    window.setTimeout(() => {
-      R.current.resolved = false;
-      setFinishedReport(null);
-      setPhase("running");
-    }, 20);
+    setPhase("running");
   }, [audio, resetAll]);
 
   // ─── Keys ────────────────────────────────────────────────────────────────
@@ -345,6 +387,15 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
   }, [phase]);
+
+  // ─── Touch / Pointer input handlers (mobile) ─────────────────────────────
+  // FIX: suporte total a touch — cada botão virtual seta a ref diretamente.
+  const onLeftDown  = useCallback(() => { inputRef.current.left  = true;  }, []);
+  const onLeftUp    = useCallback(() => { inputRef.current.left  = false; }, []);
+  const onRightDown = useCallback(() => { inputRef.current.right = true;  }, []);
+  const onRightUp   = useCallback(() => { inputRef.current.right = false; }, []);
+  const onBoostDown = useCallback(() => { inputRef.current.boost = true;  }, []);
+  const onBoostUp   = useCallback(() => { inputRef.current.boost = false; }, []);
 
   // ─── Ambience ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -409,7 +460,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       const H  = canvas.height;
       const inp = inputRef.current;
       const dying  = phase === "dying";
-      const active = phase === "running";
+      const isActive = phase === "running";
       const simDt  = dying ? dt * 0.38 : dt;
 
       // ── Cooldowns ──
@@ -419,7 +470,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       // ── Physics ──
       const accel  = (inp.boost ? 3.4 : 2.6) * tuning.handling;
-      const dir    = active ? (inp.left ? -1 : inp.right ? 1 : 0) : 0;
+      const dir    = isActive ? (inp.left ? -1 : inp.right ? 1 : 0) : 0;
       if (dir !== 0) g.shipVx += dir * accel * dt;
       else g.shipVx *= Math.pow(dying ? 0.12 : 0.015, dt);
       const maxV = (inp.boost ? 1.85 : 1.15) * tuning.handling;
@@ -431,7 +482,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       const zSpeed    = z === "entry" ? 0.82 : z === "extraction" ? 1.38 : 1.18;
       const baseSpeed = dying ? 0.38 : (inp.boost ? 2.05 : 1.28) * zSpeed;
 
-      if (active) {
+      if (isActive) {
         g.elapsed += dt;
         g.dist    += dt * baseSpeed * 88;
       }
@@ -446,13 +497,13 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       }
 
       // ── Wormhole state machine ──
-      if (active && g.elapsed >= WORM_START && g.wormState === "idle") {
+      if (isActive && g.elapsed >= WORM_START && g.wormState === "idle") {
         g.wormState = "open";
         g.wormTimer = 0;
         setWormState("open");
         audio.playEffect("unlock");
       }
-      if (active && g.wormState === "open") {
+      if (isActive && g.wormState === "open") {
         g.wormTimer += dt;
         const canEnter = g.wormTimer > 1.4 && Math.abs(g.shipX) < 0.22 && (inp.boost || g.wormTimer > 4.2);
         if (canEnter) {
@@ -464,7 +515,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           g.wormState = "done"; setWormState("done");
         }
       }
-      if (active && g.wormState === "travel") {
+      if (isActive && g.wormState === "travel") {
         g.wormProgress = Math.min(1, g.wormProgress + dt / WORM_TRAVEL);
         g.dist += dt * 200;
         g.hitIframe = Math.max(g.hitIframe, 1.5);
@@ -477,7 +528,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       }
 
       // ── Spawn ──
-      if (active && g.wormState !== "travel") {
+      if (isActive && g.wormState !== "travel") {
         g.spawnTick += dt;
         const safeOpen = g.elapsed < SAFE_SECS;
         const baseInt  = reducedSensoryMode ? 1.02 : 0.78;
@@ -492,7 +543,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       // ── Entity update & collision ──
       const zAdvance = 1.18 + baseSpeed * 0.88;
-      let threat = 0; let nearMiss = false;
+      let threat = 0;
 
       entities.current = entities.current.filter(e => {
         e.z -= simDt * zAdvance;
@@ -505,7 +556,14 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         const beaconHit = e.kind === "beacon" ? (e.radius * 0.95 + 0.08) : 0;
         const astHit    = e.kind === "asteroid" ? (e.radius * 0.66 - 0.008) : 0;
         const hitR      = e.kind === "beacon" ? beaconHit : astHit;
-        const inWindow  = e.kind === "beacon" ? (e.z < 0.18 && e.z > -0.08) : (e.z < 0.10 && e.z > -0.02);
+
+        // FIX: janela de colisão ampliada para evitar tunneling em FPS baixo ou boost.
+        // Antes: beacon (0.18..-0.08), asteroid (0.10..-0.02) — asteroide passava fantasma.
+        // dt_max=0.05, zAdvance_boost≈3.67 → deslocamento máximo ≈ 0.18/frame.
+        // A janela antiga de 0.12 era menor que o deslocamento máximo → entidade saltava.
+        const inWindow = e.kind === "beacon"
+          ? (e.z < 0.22 && e.z > -0.10)
+          : (e.z < 0.16 && e.z > -0.06);
 
         if (!dying && inWindow && dx < hitR) {
           if (e.kind === "beacon") {
@@ -534,13 +592,12 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           return false;
         }
 
-        // Near-miss
+        // Near-miss threat calculation
         if (!dying && e.kind === "asteroid" && dx < e.radius + 0.28 && e.z < 0.44 && e.z > 0) {
           const prox  = 1 - dx / (e.radius + 0.28);
           const depth = 1 - e.z / 0.44;
           threat = Math.max(threat, prox * depth);
           if (prox > 0.70 && e.z < 0.14 && dx > astHit) {
-            nearMiss = true;
             g.nearFlash = Math.min(1, g.nearFlash + 0.38);
             if (g.nearMissCool <= 0) { g.nearMissCount += 1; g.nearMissCool = 0.26; }
           }
@@ -552,7 +609,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       g.threatPeak = Math.max(g.threatPeak, threatPc);
 
       // ── End conditions ──
-      if (active && g.elapsed >= RUN_DURATION) {
+      if (isActive && g.elapsed >= RUN_DURATION) {
         cancelAnimationFrame(rafRef.current!);
         finalize("success");
         return;
@@ -631,11 +688,9 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       // ── Background cosmic scene (per-zone) ───────────────────────────
       if (!reducedSensoryMode) {
-        // Large gas giant — Interstellar-inspired
         const planetX = W * 0.84, planetY = H * 0.76;
         const planetR = H * 0.30;
 
-        // Planet glow halo
         const pHalo = ctx.createRadialGradient(planetX, planetY, planetR*0.4, planetX, planetY, planetR*2.2);
         if (z === "entry") {
           pHalo.addColorStop(0, "rgba(100,140,220,0.22)");
@@ -651,7 +706,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillStyle = pHalo;
         ctx.beginPath(); ctx.arc(planetX, planetY, planetR*2.2, 0, Math.PI*2); ctx.fill();
 
-        // Planet body
         const pBody = ctx.createRadialGradient(
           planetX - planetR*0.28, planetY - planetR*0.22, planetR*0.08,
           planetX, planetY, planetR
@@ -675,14 +729,12 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillStyle = pBody;
         ctx.beginPath(); ctx.arc(planetX, planetY, planetR, 0, Math.PI*2); ctx.fill();
 
-        // Atmospheric band
         ctx.fillStyle = z === "entry" ? "rgba(100,150,255,0.10)" :
                         z === "deepField" ? "rgba(180,100,255,0.10)" : "rgba(255,160,80,0.10)";
         ctx.beginPath();
         ctx.ellipse(planetX, planetY - planetR*0.1, planetR*0.96, planetR*0.18, 0, 0, Math.PI*2);
         ctx.fill();
 
-        // Accretion ring (Interstellar-style)
         const ringTilt = 0.22;
         ctx.save();
         ctx.translate(planetX, planetY);
@@ -702,7 +754,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         }
         ctx.restore();
 
-        // Star cluster / nebula cloud
         const ncX = W * (z === "entry" ? 0.16 : z === "deepField" ? 0.22 : 0.12);
         const ncY = H * (z === "entry" ? 0.20 : z === "deepField" ? 0.18 : 0.15);
         for (let i = 0; i < (reducedSensoryMode ? 0 : 3); i++) {
@@ -723,7 +774,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           ctx.beginPath(); ctx.arc(ncX, ncY, nebR, 0, Math.PI*2); ctx.fill();
         }
 
-        // Stellar object / bright star (supergiant)
         const sgX = W * (z === "extraction" ? 0.18 : 0.08);
         const sgY = H * 0.14;
         const sgR = z === "extraction" ? 24 : 12;
@@ -738,7 +788,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillStyle = sgCol + "1)";
         ctx.beginPath(); ctx.arc(sgX, sgY, sgR*0.55, 0, Math.PI*2); ctx.fill();
 
-        // Lens flare cross (horizontal + vertical)
         if (z === "extraction") {
           ctx.strokeStyle = "rgba(255,210,140,0.20)";
           ctx.lineWidth = 1;
@@ -748,7 +797,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           ctx.stroke();
         }
 
-        // Zone transition flash
         if (g.zoneFlash > 0) {
           ctx.fillStyle = `rgba(255,255,255,${g.zoneFlash*0.055})`;
           ctx.fillRect(0, 0, W, H);
@@ -763,7 +811,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillRect(d.x*W, d.y*H, 1, 1);
       });
 
-      // ── Stars — far layer (slow parallax) ───────────────────────────
+      // ── Stars — far layer ───────────────────────────────────────────
       starsB.current.forEach(s => {
         s.y += dt * baseSpeed * (0.10 + s.depth*0.16) * 48;
         s.twinkle += dt * 1.1;
@@ -774,7 +822,7 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillRect(s.x*W, s.y*H, sz, sz);
       });
 
-      // ── Stars — near layer (fast parallax → depth) ───────────────────
+      // ── Stars — near layer ───────────────────────────────────────────
       starsA.current.forEach(s => {
         s.y += dt * baseSpeed * (0.32 + s.depth*0.52) * 48;
         s.twinkle += dt * 1.9;
@@ -807,7 +855,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       ctx.moveTo(W*0.90, pY+55); ctx.lineTo(cX, hY);
       ctx.stroke(); ctx.setLineDash([]);
 
-      // Horizon glow
       const hg = ctx.createLinearGradient(0, hY-12, 0, hY+36);
       hg.addColorStop(0, "transparent");
       hg.addColorStop(0.5, `${zm.color}1a`);
@@ -906,14 +953,12 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           ctx.lineTo(ex,ey+sz*0.46);ctx.lineTo(ex-sz*0.33,ey);
           ctx.closePath(); ctx.fill();
         } else {
-          // Danger aura
           if (danLv > 0.06 && !reducedSensoryMode) {
             const ac = danLv>0.6 ? `rgba(255,68,46,${danLv*0.28})` : `rgba(255,152,58,${danLv*0.24})`;
             const ag = ctx.createRadialGradient(ex,ey,sz*0.4,ex,ey,sz*3.4);
             ag.addColorStop(0,ac); ag.addColorStop(1,"transparent");
             ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(ex,ey,sz*3.4,0,Math.PI*2); ctx.fill();
           }
-          // Asteroid body
           ctx.save(); ctx.translate(ex,ey); ctx.rotate(e.spin);
           const ag2 = ctx.createRadialGradient(-sz*0.28,-sz*0.22,sz*0.08,0,0,sz);
           if (danLv>0.58){
@@ -934,7 +979,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           ctx.fill();
           ctx.strokeStyle=danLv>0.5?"rgba(255,125,75,0.30)":"rgba(175,205,255,0.18)";
           ctx.lineWidth=0.9; ctx.stroke(); ctx.restore();
-          // Warning arrow
           if (danLv>0.50 && e.z<0.40 && !reducedSensoryMode) {
             const ay=ey+sz+11;
             ctx.fillStyle=`rgba(255,60,46,${0.48+danLv*0.42})`;
@@ -956,7 +1000,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       const ssx = cX + g.shipX*W*0.24*1.32;
       const ssy = pY + 4;
 
-      // Engine glow
       if (!reducedSensoryMode) {
         const gr = inp.boost ? 60 : 38;
         const eg = ctx.createRadialGradient(ssx,ssy+26,2,ssx,ssy+26,gr);
@@ -965,7 +1008,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         ctx.fillStyle=eg; ctx.beginPath(); ctx.arc(ssx,ssy+26,gr,0,Math.PI*2); ctx.fill();
       }
 
-      // Exhaust flame
       const fLen = inp.boost ? 52 : 30;
       const fWob = Math.sin(g.elapsed*30)*2.2;
       const fg   = ctx.createLinearGradient(ssx,ssy+22,ssx,ssy+22+fLen);
@@ -976,7 +1018,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       ctx.beginPath(); ctx.moveTo(ssx-11,ssy+22); ctx.lineTo(ssx+11,ssy+22);
       ctx.lineTo(ssx+fWob*0.5,ssy+22+fLen); ctx.closePath(); ctx.fill();
 
-      // Micro-thrusters on boost
       if (inp.boost && !reducedSensoryMode) {
         [-15,15].forEach(off => {
           const mg=ctx.createLinearGradient(ssx+off,ssy+15,ssx+off,ssy+30);
@@ -987,14 +1028,12 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
         });
       }
 
-      // Lateral thrust
       if ((inp.left||inp.right) && !reducedSensoryMode) {
         const td = inp.right?-1:1, tx=inp.right?ssx-20:ssx+20;
         ctx.fillStyle="rgba(122,208,255,0.58)";
         ctx.beginPath(); ctx.moveTo(tx,ssy+2); ctx.lineTo(tx,ssy+17); ctx.lineTo(tx+td*17,ssy+9.5); ctx.closePath(); ctx.fill();
       }
 
-      // Ship hull
       ctx.fillStyle="rgba(148,228,255,0.97)";
       ctx.beginPath();
       ctx.moveTo(ssx,ssy-26); ctx.lineTo(ssx+8,ssy-9);
@@ -1003,16 +1042,13 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       ctx.lineTo(ssx-19,ssy+15); ctx.lineTo(ssx-8,ssy-9);
       ctx.closePath(); ctx.fill();
 
-      // Wing shading
       ctx.fillStyle="rgba(76,174,238,0.72)";
       ctx.beginPath(); ctx.moveTo(ssx+10,ssy+6); ctx.lineTo(ssx+19,ssy+15); ctx.lineTo(ssx+8,ssy+11); ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.moveTo(ssx-10,ssy+6); ctx.lineTo(ssx-19,ssy+15); ctx.lineTo(ssx-8,ssy+11); ctx.closePath(); ctx.fill();
 
-      // Cockpit
       ctx.fillStyle="rgba(210,246,255,0.92)";
       ctx.beginPath(); ctx.ellipse(ssx,ssy-10,5.8,8.2,0,0,Math.PI*2); ctx.fill();
 
-      // Damage ring
       if (g.hits > 0 && !reducedSensoryMode) {
         const hr = 1-g.hits/tuning.hitLimit;
         const rr = 32+Math.sin(g.elapsed*6.5)*3.5;
@@ -1064,8 +1100,9 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
   const reachedZ  = finishedReport ? zone(finishedReport.distance / 88) : "entry";
   const beaconOk  = (finishedReport?.dataShards ?? 0) >= tuning.targetBeacons;
   const livePhase = phase === "running" || phase === "dying";
+  const hitsRemaining = tuning.hitLimit - hits;
 
-  const objectiveLine = (() => {
+  /* Removed legacy hardcoded copy during localization cleanup.
     if (wormState === "open")   return "Buraco de minhoca detectado — alinhe ao centro e use impulso";
     if (wormState === "travel") return "Trânsito gravitacional — campo limpo por alguns instantes";
     if (wormState === "done")   return "Corredor de extração aberto — sobreviva até o fim da janela";
@@ -1074,27 +1111,97 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
     return "Completar a janela de extração com os dados coletados";
   })();
 
-  const hullLabel = (() => {
-    const rem = tuning.hitLimit - hits;
-    if (rem <= 1) return { text: `Ruptura iminente · 1 impacto`, cls: "text-accent-red" };
-    if (rem <= 2) return { text: `Zona crítica · ${rem} impactos`, cls: "text-accent-amber" };
-    if (hullPercent <= 55) return { text: `Sob pressão · ${rem} restantes`, cls: "text-accent-amber" };
-    return { text: `Estável · ${rem} restantes`, cls: "text-accent-teal" };
+  const legacyHullLabel = (() => {
+    if (hitsRemaining <= 1) return { text: `Ruptura iminente · 1 impacto`, cls: "text-accent-red" };
+    if (hitsRemaining <= 2) return { text: `Zona crítica · ${hitsRemaining} impactos`, cls: "text-accent-amber" };
+    if (hullPercent <= 55) return { text: `Sob pressão · ${hitsRemaining} restantes`, cls: "text-accent-amber" };
+    return { text: `Estável · ${hitsRemaining} restantes`, cls: "text-accent-teal" };
   })();
+  */
+
+  const objectiveLine = useMemo(() => {
+    if (wormState === "open") {
+      return t("expedition.objective.wormholeDetected");
+    }
+    if (wormState === "travel") {
+      return t("expedition.objective.wormholeTravel");
+    }
+    if (wormState === "done") {
+      return t("expedition.objective.wormholeDone");
+    }
+    if (curZone === "entry") {
+      return t("expedition.objective.entryZone", { count: tuning.targetBeacons });
+    }
+    if (curZone === "deepField") {
+      return t("expedition.objective.deepFieldZone");
+    }
+    return t("expedition.objective.extractionZone");
+  }, [curZone, t, tuning.targetBeacons, wormState]);
+
+  const hullLabel = useMemo(() => {
+    if (hitsRemaining <= 1) {
+      return { text: t("expedition.hullState.lastHit"), cls: "text-accent-red" };
+    }
+    if (hitsRemaining <= 2) {
+      return {
+        text: t("expedition.hullState.critical", { count: hitsRemaining }),
+        cls: "text-accent-amber"
+      };
+    }
+    if (hullPercent <= 55) {
+      return {
+        text: t("expedition.hullState.pressure", { count: hitsRemaining }),
+        cls: "text-accent-amber"
+      };
+    }
+    return {
+      text: t("expedition.hullState.stable", { count: hitsRemaining }),
+      cls: "text-accent-teal"
+    };
+  }, [hitsRemaining, hullPercent, t]);
+
+  const resultStats = useMemo(
+    () =>
+      finishedReport
+        ? [
+            {
+              label: t("expedition.distance"),
+              value: `${formatNumber(finishedReport.distance, 0)} km`,
+              tone: "text-ink-strong"
+            },
+            {
+              label: t("expedition.shards"),
+              value: String(finishedReport.dataShards),
+              tone: "text-accent-sky"
+            },
+            {
+              label: t("expedition.collisions"),
+              value: `${finishedReport.collisions}/${tuning.hitLimit}`,
+              tone: finishedReport.collisions >= tuning.hitLimit ? "text-accent-red" : "text-ink-strong"
+            },
+            {
+              label: t("expedition.threatPeak"),
+              value: `${finishedReport.threatPeak ?? 0}%`,
+              tone: "text-ink-strong"
+            },
+            {
+              label: t("expedition.nearMisses"),
+              value: String(finishedReport.nearMisses ?? 0),
+              tone: "text-ink-strong"
+            },
+            {
+              label: t("expedition.score"),
+              value: formatNumber(finishedReport.score, 0),
+              tone: isSuccess ? "text-accent-teal" : "text-ink-strong"
+            }
+          ]
+        : [],
+    [finishedReport, isSuccess, t, tuning.hitLimit]
+  );
 
   return (
     <section className="grid gap-4">
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
-      <header className="depth-panel flex items-center justify-between rounded-[24px] border border-white/16 p-5">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-ink-soft">{t("expedition.eyebrow")}</p>
-          <h2 className="font-display text-2xl text-ink-strong">{t("expedition.title")}</h2>
-          <p className="mt-1 text-sm text-ink-soft">{t("expedition.subtitle")}</p>
-        </div>
-        <Telescope className="h-6 w-6 text-accent-sky" />
-      </header>
-
-      {/* ─── Briefing strip (hidden during live play) ─────────────────── */}
+      {/* ─── Briefing strip ───────────────────────────────────────────────── */}
       {!livePhase && phase !== "syncing" && phase !== "finished" ? (
         <article className="mission-loop-board">
           <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("expedition.objective")}</p>
@@ -1116,8 +1223,12 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       {/* ─── Game area ───────────────────────────────────────────────────── */}
       <div ref={gameAreaRef}>
+        {/*
+          FIX: `relative` adicionado — os overlays do HUD (absolute) precisam deste
+          ancestral posicionado para não flutuar até o topo da página.
+        */}
         <article className={cn(
-          "depth-panel expedition-canvas-wrap overflow-hidden",
+          "relative depth-panel expedition-canvas-wrap overflow-hidden",
           phase === "finished" || phase === "syncing" ? "min-h-[420px] p-0" : "min-h-[580px] p-3 sm:min-h-[660px]"
         )}>
 
@@ -1129,23 +1240,52 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                 <h3 className="mt-3 font-display text-2xl text-ink-strong">{t("expedition.briefingTitle")}</h3>
                 <p className="mt-2 text-sm text-ink-normal">{t("expedition.briefingBody")}</p>
 
-                {/* Zone cards */}
                 <div className="mt-5 grid grid-cols-3 gap-2 text-left">
-                  {(["entry","deepField","extraction"] as MissionZone[]).map(z => {
-                    const m = ZONE_META[z];
+                  {MISSION_ZONES.map((missionZone) => {
+                    const missionZoneMeta = ZONE_META[missionZone];
+                    const missionZoneCopy = zoneCopy[missionZone];
+                    return (
+                      <div key={`${missionZone}-localized`} className="rounded-xl border border-white/12 bg-black/24 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.12em]" style={{ color: missionZoneMeta.color }}>
+                          {missionZoneCopy.label}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-soft">{missionZoneCopy.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="hidden mt-5 grid grid-cols-3 gap-2 text-left">
+                  {(["entry","deepField","extraction"] as MissionZone[]).map(mz => {
+                    const m = ZONE_META[mz];
                     const labels = { entry:"Entrada", deepField:"Campo Profundo", extraction:"Extração" };
                     const descs  = { entry:"Calmo. Aprenda o fluxo.", deepField:"Denso. Alta tensão.", extraction:"Tensa. Máxima recompensa." };
                     return (
-                      <div key={z} className="rounded-xl border border-white/12 bg-black/24 p-3">
-                        <p className="text-[10px] uppercase tracking-[0.12em]" style={{ color:m.color }}>{labels[z]}</p>
-                        <p className="mt-1 text-xs text-ink-soft">{descs[z]}</p>
+                      <div key={mz} className="rounded-xl border border-white/12 bg-black/24 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.12em]" style={{ color:m.color }}>{labels[mz]}</p>
+                        <p className="mt-1 text-xs text-ink-soft">{descs[mz]}</p>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Controls */}
                 <div className="mt-5 flex items-center justify-center gap-8">
+                  <div className="text-center">
+                    <div className="mx-auto grid w-fit grid-cols-3 gap-1">
+                      <div />
+                      <div className="rounded border border-accent-sky/30 bg-accent-sky/10 px-2 py-1 text-[10px] font-mono text-accent-sky">W / UP</div>
+                      <div />
+                      <div className="rounded border border-white/20 bg-white/6 px-2 py-1 text-[10px] font-mono text-ink-normal">A / LEFT</div>
+                      <div className="rounded border border-white/10 bg-black/20 px-2 py-1 text-[10px] font-mono text-ink-soft">.</div>
+                      <div className="rounded border border-white/20 bg-white/6 px-2 py-1 text-[10px] font-mono text-ink-normal">D / RIGHT</div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] uppercase tracking-[0.14em] text-ink-soft">{t("expedition.control.move")}</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="rounded border border-accent-amber/40 bg-accent-amber/10 px-4 py-1.5 text-[10px] font-mono text-accent-amber">SPACE</div>
+                    <p className="mt-1.5 text-[10px] uppercase tracking-[0.14em] text-ink-soft">{t("expedition.control.boost")}</p>
+                  </div>
+                </div>
+                <div className="hidden mt-5 flex items-center justify-center gap-8">
                   <div className="text-center">
                     <div className="mx-auto grid w-fit grid-cols-3 gap-1">
                       <div /><div className="rounded border border-accent-sky/30 bg-accent-sky/10 px-2 py-1 text-[10px] font-mono text-accent-sky">W↑</div><div />
@@ -1161,14 +1301,28 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                   </div>
                 </div>
 
-                {/* Objective callout */}
                 <p className="mt-4 rounded-xl border border-accent-sky/22 bg-accent-sky/[0.07] px-3 py-2 text-xs text-ink-normal">
+                  {t("expedition.goal.primary")}{" "}
+                  <span className="text-ink-strong">{t("expedition.goal.secondary", { count: tuning.targetBeacons })}</span>
+                </p>
+                <p className="hidden mt-4 rounded-xl border border-accent-sky/22 bg-accent-sky/[0.07] px-3 py-2 text-xs text-ink-normal">
                   Meta principal: sobreviver até o fim da janela. Meta secundária: coletar{" "}
                   <span className="text-ink-strong">{tuning.targetBeacons} balizas quânticas</span>.
                 </p>
 
-                {/* Tuning & wormhole info */}
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    [t("expedition.tuning.handling"), `+${formatNumber((tuning.handling - 1) * 100, 0)}%`],
+                    [t("expedition.tuning.shards"), `${formatNumber(tuning.beaconRate * 100, 0)}%`],
+                    [t("expedition.tuning.hull"), `${tuning.hitLimit} ${t("expedition.collisions").toLowerCase()}`],
+                    [t("expedition.tuning.target"), `${tuning.targetBeacons} ${t("expedition.shards").toLowerCase()}`]
+                  ].map(([label, value]) => (
+                    <p key={`${label}-localized`} className="rounded-xl border border-white/12 bg-black/24 px-3 py-2 text-xs text-ink-normal">
+                      {label}: <span className="text-ink-strong">{value}</span>
+                    </p>
+                  ))}
+                </div>
+                <div className="hidden mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     ["Controle", `+${formatNumber((tuning.handling-1)*100,0)}%`],
                     ["Balizas",  `${formatNumber(tuning.beaconRate*100,0)}%`],
@@ -1182,6 +1336,10 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                 </div>
 
                 <div className="mt-3 rounded-xl border border-accent-amber/28 bg-accent-amber/[0.07] p-3 text-left">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-accent-amber">{t("expedition.wormhole.title")}</p>
+                  <p className="mt-1 text-xs text-ink-normal">{t("expedition.wormhole.body")}</p>
+                </div>
+                <div className="hidden mt-3 rounded-xl border border-accent-amber/28 bg-accent-amber/[0.07] p-3 text-left">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-accent-amber">Buraco de minhoca</p>
                   <p className="mt-1 text-xs text-ink-normal">
                     Surge durante a run. Alinhe ao centro da tela e use impulso para atravessar.
@@ -1201,9 +1359,14 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
             </div>
           ) : null}
 
-          {/* CANVAS */}
+          {/* CANVAS — touch-action:none evita scroll fantasma em mobile */}
           {livePhase ? (
-            <canvas ref={canvasRef} className="block h-[580px] w-full rounded-[16px] sm:h-[660px]" />
+            <canvas
+              ref={canvasRef}
+              // FIX: touch-action none — sem isso, swipe no canvas dispara scroll da página
+              style={{ touchAction: "none" }}
+              className="block h-[580px] w-full rounded-[16px] sm:h-[660px]"
+            />
           ) : null}
 
           {/* Zone announce */}
@@ -1213,9 +1376,9 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                 className="rounded-2xl border px-6 py-3 text-center backdrop-blur-sm"
                 style={{ borderColor:`${ZONE_META[zoneFlash.z].color}40`, background:"linear-gradient(180deg,rgba(4,10,20,0.86),rgba(2,6,14,0.93))" }}
               >
-                <p className="text-[10px] uppercase tracking-[0.22em] text-ink-soft">Zona detectada</p>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-ink-soft">{t("expedition.zoneDetected")}</p>
                 <p className="mt-1 font-display text-xl" style={{ color:ZONE_META[zoneFlash.z].color }}>
-                  {ZONE_META[zoneFlash.z].label}
+                  {zoneCopy[zoneFlash.z].label}
                 </p>
               </div>
             </div>
@@ -1223,9 +1386,47 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
           {/* HUD — top */}
           {livePhase ? (
+            <>
             <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 grid grid-cols-3 gap-2 sm:grid-cols-6">
               <div className="rounded-xl border border-white/14 bg-black/52 px-2.5 py-1.5 text-xs text-ink-normal backdrop-blur-sm">
-                <span className="text-ink-soft">km </span>{formatNumber(distKm,0)}
+                <span className="text-ink-soft">{t("expedition.distance")} </span>{formatNumber(distKm, 0)} km
+              </div>
+              <div className="rounded-xl border border-accent-sky/30 bg-black/52 px-2.5 py-1.5 text-xs text-accent-sky backdrop-blur-sm">
+                {t("expedition.shards")} {beaconCount}/{tuning.targetBeacons}
+              </div>
+              <div
+                className={cn(
+                  "rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm",
+                  hullPercent < 40
+                    ? "border-accent-red/55 text-accent-red"
+                    : hullPercent < 70
+                      ? "border-accent-amber/45 text-accent-amber"
+                      : "border-accent-teal/35 text-accent-teal"
+                )}
+              >
+                {t("expedition.hull")} {hullPercent}%
+              </div>
+              <div className="rounded-xl border border-white/14 bg-black/52 px-2.5 py-1.5 text-xs text-ink-normal backdrop-blur-sm">
+                {t("expedition.time")} {remaining}s
+              </div>
+              <div
+                className="rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm"
+                style={{ borderColor: `${ZONE_META[curZone].color}38`, color: ZONE_META[curZone].color }}
+              >
+                {zoneCopy[curZone].label}
+              </div>
+              <div
+                className={cn(
+                  "rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm",
+                  hullBorderClass(hitsRemaining, hullPercent)
+                )}
+              >
+                <span className={hullLabel.cls}>{hullLabel.text}</span>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 hidden grid-cols-3 gap-2 sm:grid-cols-6">
+              <div className="rounded-xl border border-white/14 bg-black/52 px-2.5 py-1.5 text-xs text-ink-normal backdrop-blur-sm">
+                <span className="text-ink-soft">{t("expedition.distance")} </span>{formatNumber(distKm,0)} km
               </div>
               <div className="rounded-xl border border-accent-sky/30 bg-black/52 px-2.5 py-1.5 text-xs text-accent-sky backdrop-blur-sm">
                 ◆ {beaconCount}/{tuning.targetBeacons}
@@ -1239,19 +1440,24 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
               </div>
               <div className="rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm"
                 style={{ borderColor:`${ZONE_META[curZone].color}38`, color:ZONE_META[curZone].color }}>
-                {ZONE_META[curZone].label}
+                {zoneCopy[curZone].label}
               </div>
-              <div className={cn("rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm", hullLabel.cls.replace("text-","border-").replace("/","/")+"/30")}>
+              {/* FIX: classe de borda derivada estaticamente — Tailwind purga classes dinâmicas */}
+              <div className={cn(
+                "rounded-xl border bg-black/52 px-2.5 py-1.5 text-xs backdrop-blur-sm",
+                hullBorderClass(hitsRemaining, hullPercent)
+              )}>
                 <span className={hullLabel.cls}>{hullLabel.text}</span>
               </div>
             </div>
+            </>
           ) : null}
 
-          {/* Objective strip — bottom */}
+          {/* Objective strip */}
           {livePhase ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
               <div className="max-w-2xl rounded-2xl border border-white/14 bg-black/62 px-4 py-2 text-center backdrop-blur-sm">
-                <p className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">Objetivo atual</p>
+                <p className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">{t("expedition.objectiveLive")}</p>
                 <p className="mt-0.5 text-sm font-medium text-ink-strong">{objectiveLine}</p>
               </div>
             </div>
@@ -1260,11 +1466,26 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           {/* Critical hull warning */}
           {livePhase && hullPercent <= 50 ? (
             <div className="pointer-events-none absolute inset-x-0 top-20 z-30 flex justify-center px-4">
+              <div
+                className={cn(
+                  "rounded-full border bg-black/78 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(1,4,10,0.48)]",
+                  hitsRemaining <= 1 ? "border-accent-red/62 text-accent-red" : "border-accent-amber/55 text-accent-amber"
+                )}
+              >
+                {hitsRemaining <= 1
+                  ? t("expedition.warning.finalHit")
+                  : t("expedition.warning.hullCritical", { count: hitsRemaining })}
+              </div>
+            </div>
+          ) : null}
+
+          {false && livePhase && hullPercent <= 50 ? (
+            <div className="pointer-events-none absolute inset-x-0 top-20 z-30 flex justify-center px-4">
               <div className={cn(
                 "rounded-full border bg-black/74 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em]",
-                tuning.hitLimit-hits<=1 ? "border-accent-red/62 text-accent-red" : "border-accent-amber/55 text-accent-amber"
+                hitsRemaining<=1 ? "border-accent-red/62 text-accent-red" : "border-accent-amber/55 text-accent-amber"
               )}>
-                {tuning.hitLimit-hits<=1 ? "Próximo impacto encerra a missão" : `Casco crítico — ${tuning.hitLimit-hits} impactos restantes`}
+                {hitsRemaining<=1 ? "Próximo impacto encerra a missão" : `Casco crítico — ${hitsRemaining} impactos restantes`}
               </div>
             </div>
           ) : null}
@@ -1272,14 +1493,79 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
           {/* Death sequence */}
           {phase === "dying" ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-4">
+              <div className="rounded-full border border-accent-red/60 bg-black/78 px-4 py-1.5 text-xs uppercase tracking-[0.14em] text-accent-red shadow-[0_12px_28px_rgba(1,4,10,0.44)]">
+                {t("expedition.status.collapsing")}
+              </div>
+            </div>
+          ) : null}
+
+          {false && phase === "dying" ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-4">
               <div className="rounded-full border border-accent-red/60 bg-black/76 px-4 py-1.5 text-xs uppercase tracking-[0.14em] text-accent-red">
                 Casco colapsando · compilando telemetria da missão
               </div>
             </div>
           ) : null}
 
-          {/* SYNCING — loading state after run ends */}
+          {/*
+            FIX: Controles touch — visíveis apenas em telas menores (sm:hidden).
+            Botões com pointer handlers diretos na inputRef — sem state, sem re-render.
+            touch-action:none em cada botão previne scroll enquanto segura.
+          */}
+          {livePhase ? (
+            <div className="absolute bottom-14 inset-x-0 z-20 flex items-center justify-between gap-2 px-3 sm:hidden">
+              <button
+                type="button"
+                onPointerDown={onLeftDown}
+                onPointerUp={onLeftUp}
+                onPointerLeave={onLeftUp}
+                onPointerCancel={onLeftUp}
+                style={{ touchAction: "none" }}
+                className="flex h-14 w-20 items-center justify-center rounded-2xl border border-white/20 bg-black/50 text-2xl text-white/70 backdrop-blur-sm active:bg-white/15 select-none"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onPointerDown={onBoostDown}
+                onPointerUp={onBoostUp}
+                onPointerLeave={onBoostUp}
+                onPointerCancel={onBoostUp}
+                style={{ touchAction: "none" }}
+                className="flex h-14 flex-1 items-center justify-center rounded-2xl border border-accent-sky/35 bg-accent-sky/12 text-xs font-semibold uppercase tracking-widest text-accent-sky backdrop-blur-sm active:bg-accent-sky/28 select-none"
+              >
+                {t("expedition.control.boost")}
+              </button>
+              <button
+                type="button"
+                onPointerDown={onRightDown}
+                onPointerUp={onRightUp}
+                onPointerLeave={onRightUp}
+                onPointerCancel={onRightUp}
+                style={{ touchAction: "none" }}
+                className="flex h-14 w-20 items-center justify-center rounded-2xl border border-white/20 bg-black/50 text-2xl text-white/70 backdrop-blur-sm active:bg-white/15 select-none"
+              >
+                →
+              </button>
+            </div>
+          ) : null}
+
+          {/* SYNCING */}
           {phase === "syncing" ? (
+            <div className="grid min-h-[420px] place-items-center rounded-[16px] border border-white/14 bg-[linear-gradient(180deg,rgba(4,9,18,0.92),rgba(2,6,14,0.97))] p-8 text-center">
+              <div className="w-full max-w-sm">
+                <div className="mx-auto h-12 w-12 rounded-full border border-accent-sky/30 border-t-accent-sky/80 animate-spin" />
+                <p className="mt-5 font-display text-xl text-ink-strong">{t("expedition.sync.title")}</p>
+                <p className="mt-2 text-sm text-ink-soft">{t("expedition.sync.body")}</p>
+                <div className="mt-6 h-1.5 overflow-hidden rounded-full border border-white/12 bg-white/[0.05]">
+                  <div className="h-full animate-[expedition-sync_1.1s_ease-out_forwards] rounded-full bg-gradient-to-r from-accent-sky/72 via-accent-teal/80 to-accent-sky/72" />
+                </div>
+                <p className="mt-3 text-[10px] uppercase tracking-[0.20em] text-ink-soft">{t("expedition.sync.footer")}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {false && phase === "syncing" ? (
             <div className="grid min-h-[420px] place-items-center rounded-[16px] border border-white/14 bg-[linear-gradient(180deg,rgba(4,9,18,0.92),rgba(2,6,14,0.97))] p-8 text-center">
               <div className="max-w-sm w-full">
                 <div className="mx-auto h-12 w-12 rounded-full border border-accent-sky/30 border-t-accent-sky/80 animate-spin" />
@@ -1299,6 +1585,104 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
           {/* FINISHED */}
           {phase === "finished" && finishedReport ? (
+            <div
+              className={cn(
+                "grid min-h-[420px] place-items-center rounded-[16px] border p-6 text-center",
+                isSuccess
+                  ? "border-accent-teal/35 bg-[linear-gradient(180deg,rgba(5,25,20,0.82),rgba(2,12,10,0.94))]"
+                  : "border-accent-red/35 bg-[linear-gradient(180deg,rgba(25,5,5,0.82),rgba(12,2,2,0.94))]"
+              )}
+            >
+              <div className="w-full max-w-md">
+                {isSuccess ? (
+                  <Sparkles className="mx-auto h-10 w-10 text-accent-teal" />
+                ) : (
+                  <ShieldAlert className="mx-auto h-10 w-10 text-accent-red" />
+                )}
+
+                <h3 className={cn("mt-3 font-display text-2xl", isSuccess ? "text-accent-teal" : "text-accent-red")}>
+                  {isSuccess ? t("expedition.result.success") : t("expedition.result.failure")}
+                </h3>
+
+                {!isSuccess ? (
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {t("expedition.result.reached", { zone: zoneCopy[reachedZ].label })}
+                  </p>
+                ) : null}
+
+                {isSuccess ? (
+                  <p
+                    className={cn(
+                      "mt-3 rounded-xl border px-3 py-2 text-sm",
+                      beaconOk
+                        ? "border-accent-teal/38 bg-accent-teal/10 text-accent-teal"
+                        : "border-accent-amber/38 bg-accent-amber/10 text-accent-amber"
+                    )}
+                  >
+                    {beaconOk ? t("expedition.report.secondaryGoalMet") : t("expedition.report.partialData")}
+                  </p>
+                ) : (
+                  <p className="mt-3 rounded-xl border border-accent-red/38 bg-accent-red/10 px-3 py-2 text-sm text-accent-red">
+                    {t("expedition.failure.hitLimit")}
+                  </p>
+                )}
+
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {resultStats.map((entry) => (
+                    <div
+                      key={entry.label}
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5",
+                        entry.label === t("expedition.collisions") && finishedReport.collisions >= tuning.hitLimit
+                          ? "border-accent-red/38 bg-accent-red/8"
+                          : "border-white/14 bg-black/28"
+                      )}
+                    >
+                      <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">{entry.label}</p>
+                      <p className={cn("mt-1 text-sm font-medium", entry.tone)}>{entry.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  className={cn(
+                    "mt-4 rounded-xl border px-4 py-3",
+                    isSuccess ? "border-accent-teal/28 bg-accent-teal/[0.06]" : "border-accent-amber/28 bg-accent-amber/[0.06]"
+                  )}
+                >
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-ink-soft">{t("expedition.result.suggestedDirective")}</p>
+                  <p className={cn("mt-1 text-sm font-medium", isSuccess ? "text-accent-teal" : "text-accent-amber")}>
+                    {t(`expedition.hint.${finishedReport.hint}`)}
+                  </p>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={startRun}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/22 bg-black/28 px-4 py-2 text-sm text-ink-normal transition hover:bg-white/10"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {t("expedition.retry")}
+                  </button>
+                  <Link
+                    to={`/dashboard?expeditionHint=${finishedReport.hint}`}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition",
+                      isSuccess
+                        ? "border-accent-teal/60 bg-accent-teal/12 text-accent-teal hover:bg-accent-teal/20"
+                        : "border-accent-amber/60 bg-accent-amber/12 text-accent-amber hover:bg-accent-amber/20"
+                    )}
+                  >
+                    <Zap className="h-4 w-4" />
+                    {t("expedition.applyHint")}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {false && phase === "finished" && finishedReport ? (
             <div className={cn(
               "grid min-h-[420px] place-items-center rounded-[16px] border p-6 text-center",
               isSuccess
@@ -1320,7 +1704,6 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                   </p>
                 ) : null}
 
-                {/* Objective status */}
                 {isSuccess ? (
                   <p className={cn("mt-3 rounded-xl border px-3 py-2 text-sm",
                     beaconOk?"border-accent-teal/38 bg-accent-teal/10 text-accent-teal":"border-accent-amber/38 bg-accent-amber/10 text-accent-amber")}>
@@ -1334,49 +1717,46 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                   </p>
                 )}
 
-                {/* Stats grid */}
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="rounded-xl border border-white/14 bg-black/28 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Distância</p>
-                    <p className="mt-1 text-sm text-ink-strong">{formatNumber(finishedReport.distance,0)} km</p>
+                    <p className="mt-1 text-sm text-ink-strong">{formatNumber(finishedReport!.distance,0)} km</p>
                   </div>
                   <div className="rounded-xl border border-accent-sky/22 bg-black/28 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Balizas</p>
-                    <p className="mt-1 text-sm text-accent-sky">{finishedReport.dataShards}</p>
+                    <p className="mt-1 text-sm text-accent-sky">{finishedReport!.dataShards}</p>
                   </div>
                   <div className={cn("rounded-xl border px-3 py-2.5",
-                    finishedReport.collisions>=tuning.hitLimit?"border-accent-red/38 bg-accent-red/8":"border-white/14 bg-black/28")}>
+                    finishedReport!.collisions>=tuning.hitLimit?"border-accent-red/38 bg-accent-red/8":"border-white/14 bg-black/28")}>
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Impactos</p>
-                    <p className={cn("mt-1 text-sm", finishedReport.collisions>=tuning.hitLimit?"text-accent-red":"text-ink-strong")}>
-                      {finishedReport.collisions}/{tuning.hitLimit}
+                    <p className={cn("mt-1 text-sm", finishedReport!.collisions>=tuning.hitLimit?"text-accent-red":"text-ink-strong")}>
+                      {finishedReport!.collisions}/{tuning.hitLimit}
                     </p>
                   </div>
                   <div className="rounded-xl border border-white/14 bg-black/28 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Pico ameaça</p>
-                    <p className="mt-1 text-sm text-ink-strong">{finishedReport.threatPeak ?? 0}%</p>
+                    <p className="mt-1 text-sm text-ink-strong">{finishedReport!.threatPeak ?? 0}%</p>
                   </div>
                   <div className="rounded-xl border border-white/14 bg-black/28 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Quase-colisões</p>
-                    <p className="mt-1 text-sm text-ink-strong">{finishedReport.nearMisses ?? 0}</p>
+                    <p className="mt-1 text-sm text-ink-strong">{finishedReport!.nearMisses ?? 0}</p>
                   </div>
                   <div className="rounded-xl border border-white/14 bg-black/28 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.11em] text-ink-soft">Pontuação</p>
                     <p className={cn("mt-1 text-sm font-semibold", isSuccess?"text-accent-teal":"text-ink-strong")}>
-                      {formatNumber(finishedReport.score,0)}
+                      {formatNumber(finishedReport!.score,0)}
                     </p>
                   </div>
                 </div>
 
-                {/* Directive */}
                 <div className={cn("mt-4 rounded-xl border px-4 py-3",
                   isSuccess?"border-accent-teal/28 bg-accent-teal/[0.06]":"border-accent-amber/28 bg-accent-amber/[0.06]")}>
                   <p className="text-[10px] uppercase tracking-[0.14em] text-ink-soft">Diretiva sugerida</p>
                   <p className={cn("mt-1 text-sm font-medium", isSuccess?"text-accent-teal":"text-accent-amber")}>
-                    {t(`expedition.hint.${finishedReport.hint}`)}
+                    {t(`expedition.hint.${finishedReport!.hint}`)}
                   </p>
                 </div>
 
-                {/* CTAs */}
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                   <button
                     type="button"
@@ -1384,10 +1764,10 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
                     className="inline-flex items-center gap-2 rounded-full border border-white/22 bg-black/28 px-4 py-2 text-sm text-ink-normal transition hover:bg-white/10"
                   >
                     <RotateCcw className="h-4 w-4" />
-                    Nova run
+                    {t("expedition.retry")}
                   </button>
                   <Link
-                    to={`/dashboard?expeditionHint=${finishedReport.hint}`}
+                    to={`/dashboard?expeditionHint=${finishedReport!.hint}`}
                     className={cn(
                       "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition",
                       isSuccess
@@ -1407,6 +1787,65 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
 
       {/* ─── Progress bars (live only) ───────────────────────────────────── */}
       {livePhase ? (
+        <div className="depth-panel grid gap-4 rounded-[20px] border border-white/14 p-4 sm:grid-cols-3">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-[11px]">
+              <span className="uppercase tracking-[0.13em] text-ink-soft">{t("expedition.progress")}</span>
+              <span className="text-ink-soft">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full border border-white/14 bg-white/[0.06]">
+              <div
+                className="h-full rounded-full transition-[width]"
+                style={{ width: `${progress}%`, background: `linear-gradient(90deg,#3888b8,${ZONE_META[curZone].color})` }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-[11px]">
+              <span className="uppercase tracking-[0.13em] text-ink-soft">{t("expedition.progress.hull")}</span>
+              <span className={hullPercent < 40 ? "text-accent-red" : hullPercent < 70 ? "text-accent-amber" : "text-accent-teal"}>
+                {hullPercent}%
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full border border-white/14 bg-white/[0.06]">
+              <div
+                className={cn(
+                  "h-full rounded-full bg-gradient-to-r transition-[width]",
+                  hullPercent < 40
+                    ? "from-accent-red/90 to-accent-red/55"
+                    : hullPercent < 70
+                      ? "from-accent-amber/88 to-accent-amber/55"
+                      : "from-accent-teal/88 to-accent-sky/55"
+                )}
+                style={{ width: `${hullPercent}%` }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-[11px]">
+              <span className="uppercase tracking-[0.13em] text-ink-soft">{t("expedition.progress.threatLevel")}</span>
+              <span className={threatPct >= 70 ? "text-accent-red" : threatPct >= 42 ? "text-accent-amber" : "text-accent-teal"}>
+                {threatPct}%
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full border border-white/14 bg-white/[0.06]">
+              <div
+                className={cn(
+                  "h-full rounded-full bg-gradient-to-r transition-[width]",
+                  threatPct >= 70
+                    ? "from-accent-red/90 to-accent-red/55"
+                    : threatPct >= 42
+                      ? "from-accent-amber/88 to-accent-amber/55"
+                      : "from-accent-teal/58 to-accent-teal/28"
+                )}
+                style={{ width: `${threatPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {false && livePhase ? (
         <div className="depth-panel grid gap-4 rounded-[20px] border border-white/14 p-4 sm:grid-cols-3">
           <div>
             <div className="mb-1.5 flex items-center justify-between text-[11px]">
@@ -1446,12 +1885,21 @@ export function ExpeditionPage({ station }: { station: StationState }): ReactEle
       ) : null}
 
       {/* ─── Last report chip ─────────────────────────────────────────────── */}
-      {lastReport && !livePhase && phase !== "syncing" && phase !== "finished" ? (
+      {hasLastReport && !livePhase && phase !== "syncing" && phase !== "finished" ? (
+        <article className="rounded-[20px] border border-white/14 bg-black/22 p-4">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("expedition.lastReport")}</p>
+          <p className="mt-1 text-sm text-ink-normal">
+            {t("expedition.score")}: {formatNumber(lastReport.score, 0)} | {t("expedition.hintLabel")} {t(`expedition.hint.${lastReport.hint}`)}
+          </p>
+        </article>
+      ) : null}
+
+      {false && hasLastReport && !livePhase && phase !== "syncing" && phase !== "finished" ? (
         <article className="rounded-[20px] border border-white/14 bg-black/22 p-4">
           <p className="text-[11px] uppercase tracking-[0.16em] text-ink-soft">{t("expedition.lastReport")}</p>
           <p className="mt-1 text-sm text-ink-normal">
             {t("expedition.score")}: {formatNumber(lastReport.score,0)} &nbsp;·&nbsp;
-            {t("expedition.hintLabel")} {t(`expedition.hint.${lastReport.hint}`)}
+            {t("expedition.hintLabel")} {t(`expedition.hint.${lastReport!.hint}`)}
           </p>
         </article>
       ) : null}

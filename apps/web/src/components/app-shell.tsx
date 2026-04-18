@@ -381,6 +381,10 @@ export function AppShell({ station, userName, onLogout, children }: AppShellProp
                     <p className="mt-1 font-display text-lg text-ink-strong">
                       {t(`transition.scene.${transitionLabel.from}`)} {t("transition.to")} {t(`transition.scene.${transitionLabel.to}`)}
                     </p>
+                    <p className="mt-2 text-xs text-ink-soft">{t(`scene.context.${transitionLabel.to}`)}</p>
+                    <div className="mt-3 h-1 overflow-hidden rounded-full border border-white/10 bg-white/[0.05]">
+                      <div className="h-full w-full origin-left animate-[introProgressShine_1.1s_ease-out] bg-gradient-to-r from-accent-sky/78 via-accent-teal/72 to-transparent" />
+                    </div>
                   </div>
                 ) : null}
               </div>
