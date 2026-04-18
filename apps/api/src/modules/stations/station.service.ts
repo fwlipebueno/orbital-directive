@@ -1,7 +1,9 @@
 import {
   COMMAND_ACTION_RULES,
+  RESOURCE_MAX,
   deriveMissionTelemetry,
   moduleTypes,
+  type ResourceSnapshot,
   type ModuleType,
   type CommandActionInput,
   type UpdateCommandStateInput,
@@ -26,6 +28,34 @@ import { idempotencyService } from "../../services/idempotency-service";
 import { stationSimulationService } from "../../services/station-simulation-service";
 import { assertUserCriticalRateLimit } from "../../security/rate-limit";
 import { AppError } from "../../utils/errors";
+
+function mapResourceSnapshot(
+  resources: NonNullable<Awaited<ReturnType<typeof stationRepository.getResources>>>
+): ResourceSnapshot {
+  return {
+    energy: Number(resources.energy),
+    oxygen: Number(resources.oxygen),
+    water: Number(resources.water),
+    food: Number(resources.food),
+    credits: Number(resources.credits),
+    research: Number(resources.research),
+    hullIntegrity: Number(resources.hullIntegrity),
+    morale: Number(resources.morale)
+  };
+}
+
+function clampResourceSnapshot(resources: ResourceSnapshot): ResourceSnapshot {
+  return {
+    energy: Math.min(RESOURCE_MAX.energy, resources.energy),
+    oxygen: Math.min(RESOURCE_MAX.oxygen, resources.oxygen),
+    water: Math.min(RESOURCE_MAX.water, resources.water),
+    food: Math.min(RESOURCE_MAX.food, resources.food),
+    credits: Math.min(RESOURCE_MAX.credits, resources.credits),
+    research: Math.min(RESOURCE_MAX.research, resources.research),
+    hullIntegrity: Math.min(RESOURCE_MAX.hullIntegrity, resources.hullIntegrity),
+    morale: Math.min(RESOURCE_MAX.morale, resources.morale)
+  };
+}
 
 export const stationService = {
   async ensureUserStation(userId: string, name = "Orbital Directive Core") {
@@ -245,6 +275,7 @@ export const stationService = {
             throw new AppError("Command state unavailable.", "COMMAND_STATE_NOT_FOUND", 500);
           }
 
+          const currentResources = mapResourceSnapshot(resources);
           const now = new Date();
           if (commandState.lastOrbitalBurnAt) {
             const cooldownUntil =
@@ -255,16 +286,7 @@ export const stationService = {
           }
 
           const telemetry = deriveMissionTelemetry({
-            resources: {
-              energy: Number(resources.energy),
-              oxygen: Number(resources.oxygen),
-              water: Number(resources.water),
-              food: Number(resources.food),
-              credits: Number(resources.credits),
-              research: Number(resources.research),
-              hullIntegrity: Number(resources.hullIntegrity),
-              morale: Number(resources.morale)
-            },
+            resources: currentResources,
             modules: modules.map((module) => ({
               id: module.id,
               type: module.moduleType as ModuleType,
@@ -280,8 +302,8 @@ export const stationService = {
             throw new AppError("Delta-v window closed for orbital correction.", "ORBITAL_WINDOW_CLOSED", 409);
           }
 
-          const nextEnergy = Number(resources.energy) - COMMAND_ACTION_RULES.orbitalBurn.energyCost;
-          const nextCredits = Number(resources.credits) - COMMAND_ACTION_RULES.orbitalBurn.creditsCost;
+          const nextEnergy = currentResources.energy - COMMAND_ACTION_RULES.orbitalBurn.energyCost;
+          const nextCredits = currentResources.credits - COMMAND_ACTION_RULES.orbitalBurn.creditsCost;
           if (nextEnergy < 0) {
             throw new AppError("Insufficient energy for orbital burn.", "INSUFFICIENT_ENERGY", 409);
           }
@@ -291,16 +313,16 @@ export const stationService = {
 
           await stationRepository.updateResources(
             input.stationId,
-            {
+            clampResourceSnapshot({
               energy: nextEnergy,
-              oxygen: Number(resources.oxygen),
-              water: Number(resources.water),
-              food: Number(resources.food),
+              oxygen: currentResources.oxygen,
+              water: currentResources.water,
+              food: currentResources.food,
               credits: nextCredits,
-              research: Number(resources.research),
-              hullIntegrity: Math.min(100, Number(resources.hullIntegrity) + 3.8),
-              morale: Math.min(100, Number(resources.morale) + 1.2)
-            },
+              research: currentResources.research,
+              hullIntegrity: currentResources.hullIntegrity + 3.8,
+              morale: currentResources.morale + 1.2
+            }),
             tx
           );
           await stationRepository.markOrbitalBurn(input.stationId, now, tx);
@@ -371,6 +393,7 @@ export const stationService = {
             throw new AppError("Command state unavailable.", "COMMAND_STATE_NOT_FOUND", 500);
           }
 
+          const currentResources = mapResourceSnapshot(resources);
           const now = new Date();
           if (commandState.lastReserveDeployAt) {
             const cooldownUntil =
@@ -380,23 +403,23 @@ export const stationService = {
             }
           }
 
-          const nextCredits = Number(resources.credits) - COMMAND_ACTION_RULES.emergencyReserve.creditsCost;
+          const nextCredits = currentResources.credits - COMMAND_ACTION_RULES.emergencyReserve.creditsCost;
           if (nextCredits < 0) {
             throw new AppError("Insufficient credits for emergency reserve.", "INSUFFICIENT_CREDITS", 409);
           }
 
           await stationRepository.updateResources(
             input.stationId,
-            {
-              energy: Number(resources.energy) + COMMAND_ACTION_RULES.emergencyReserve.grants.energy,
-              oxygen: Number(resources.oxygen) + COMMAND_ACTION_RULES.emergencyReserve.grants.oxygen,
-              water: Number(resources.water) + COMMAND_ACTION_RULES.emergencyReserve.grants.water,
-              food: Number(resources.food),
+            clampResourceSnapshot({
+              energy: currentResources.energy + COMMAND_ACTION_RULES.emergencyReserve.grants.energy,
+              oxygen: currentResources.oxygen + COMMAND_ACTION_RULES.emergencyReserve.grants.oxygen,
+              water: currentResources.water + COMMAND_ACTION_RULES.emergencyReserve.grants.water,
+              food: currentResources.food,
               credits: nextCredits,
-              research: Number(resources.research),
-              hullIntegrity: Number(resources.hullIntegrity),
-              morale: Number(resources.morale) + COMMAND_ACTION_RULES.emergencyReserve.grants.morale
-            },
+              research: currentResources.research,
+              hullIntegrity: currentResources.hullIntegrity,
+              morale: currentResources.morale + COMMAND_ACTION_RULES.emergencyReserve.grants.morale
+            }),
             tx
           );
           await stationRepository.markReserveDeploy(input.stationId, now, tx);
